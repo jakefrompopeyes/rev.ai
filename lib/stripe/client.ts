@@ -20,8 +20,8 @@ export const STRIPE_OAUTH_CONFIG = {
   authorizeUrl: 'https://connect.stripe.com/oauth/authorize',
   tokenUrl: 'https://connect.stripe.com/oauth/token',
   deauthorizeUrl: 'https://connect.stripe.com/oauth/deauthorize',
-  // Read-only scopes for revenue data
-  scope: 'read_only',
+  // Stripe requires read_write scope for Connect Standard (read-only access to data still works)
+  scope: 'read_write',
 };
 
 // Get the app URL (works on Vercel and locally)

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuthWithOrg } from '@/lib/supabase/auth-helpers';
-import { getCurrentMetricsSnapshot, getMetricsHistory } from '@/lib/metrics/compute';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
+    const { requireAuthWithOrg } = await import('@/lib/supabase/auth-helpers');
+    const { getCurrentMetricsSnapshot, getMetricsHistory } = await import('@/lib/metrics/compute');
+    
     const { organizationId } = await requireAuthWithOrg();
 
     const searchParams = request.nextUrl.searchParams;

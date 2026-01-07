@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuthWithOrg } from '@/lib/supabase/auth-helpers';
-import { getActiveInsights, dismissInsight } from '@/lib/ai/insights';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function GET() {
   try {
+    const { requireAuthWithOrg } = await import('@/lib/supabase/auth-helpers');
+    const { getActiveInsights } = await import('@/lib/ai/insights');
+    
     const { organizationId } = await requireAuthWithOrg();
-
     const insights = await getActiveInsights(organizationId);
     return NextResponse.json({ insights });
   } catch (error) {
@@ -24,8 +25,10 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const { requireAuthWithOrg } = await import('@/lib/supabase/auth-helpers');
+    const { dismissInsight } = await import('@/lib/ai/insights');
+    
     const { organizationId } = await requireAuthWithOrg();
-
     const body = await request.json();
     const { insightId, action } = body;
 

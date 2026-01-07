@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import { requireAuthWithOrg } from '@/lib/supabase/auth-helpers';
-import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function GET() {
   try {
+    const { requireAuthWithOrg } = await import('@/lib/supabase/auth-helpers');
+    const { prisma } = await import('@/lib/db');
+    
     const { organizationId } = await requireAuthWithOrg();
 
     const connection = await prisma.stripeConnection.findUnique({

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exchangeCodeForToken } from '@/lib/stripe/client';
-import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,6 +35,10 @@ export async function GET(request: NextRequest) {
         new URL('/dashboard?error=Invalid state parameter', process.env.APP_URL)
       );
     }
+
+    // Dynamic imports to avoid build-time issues
+    const { exchangeCodeForToken } = await import('@/lib/stripe/client');
+    const { prisma } = await import('@/lib/db');
 
     // Exchange code for token
     const tokenData = await exchangeCodeForToken(code);

@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server';
-import { requireAuthWithOrg } from '@/lib/supabase/auth-helpers';
-import { syncStripeData } from '@/lib/stripe/sync';
-import { computeDailyMetrics } from '@/lib/metrics/compute';
-import { generateInsights } from '@/lib/ai/insights';
-import { generateRecommendations } from '@/lib/ai/recommendations';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST() {
   try {
+    const { requireAuthWithOrg } = await import('@/lib/supabase/auth-helpers');
+    const { syncStripeData } = await import('@/lib/stripe/sync');
+    const { computeDailyMetrics } = await import('@/lib/metrics/compute');
+    const { generateInsights } = await import('@/lib/ai/insights');
+    const { generateRecommendations } = await import('@/lib/ai/recommendations');
+    
     const { organizationId } = await requireAuthWithOrg();
 
     // Step 1: Sync Stripe data

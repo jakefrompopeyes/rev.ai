@@ -1,8 +1,7 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -10,6 +9,9 @@ export async function GET(request: Request) {
   const redirect = searchParams.get('redirect') || '/dashboard';
 
   if (code) {
+    const { createClient } = await import('@/lib/supabase/server');
+    const { prisma } = await import('@/lib/db');
+    
     const supabase = createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     

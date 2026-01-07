@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuthWithOrg } from '@/lib/supabase/auth-helpers';
-import { 
-  getRecommendations, 
-  markRecommendationImplemented, 
-  dismissRecommendation,
-  updateRecommendationResults 
-} from '@/lib/ai/recommendations';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function GET() {
   try {
+    const { requireAuthWithOrg } = await import('@/lib/supabase/auth-helpers');
+    const { getRecommendations } = await import('@/lib/ai/recommendations');
+    
     const { organizationId } = await requireAuthWithOrg();
-
     const recommendations = await getRecommendations(organizationId);
     return NextResponse.json({ recommendations });
   } catch (error) {
@@ -29,8 +25,14 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const { requireAuthWithOrg } = await import('@/lib/supabase/auth-helpers');
+    const { 
+      markRecommendationImplemented, 
+      dismissRecommendation,
+      updateRecommendationResults 
+    } = await import('@/lib/ai/recommendations');
+    
     const { organizationId } = await requireAuthWithOrg();
-
     const body = await request.json();
     const { recommendationId, action } = body;
 

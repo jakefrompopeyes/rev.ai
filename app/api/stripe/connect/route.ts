@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { requireAuthWithOrg } from '@/lib/supabase/auth-helpers';
-import { getStripeOAuthUrl } from '@/lib/stripe/client';
-import { prisma } from '@/lib/db';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function GET() {
   try {
+    const { requireAuthWithOrg } = await import('@/lib/supabase/auth-helpers');
+    const { getStripeOAuthUrl } = await import('@/lib/stripe/client');
+    
     const { organizationId } = await requireAuthWithOrg();
 
     // Generate a secure state token
@@ -37,6 +38,9 @@ export async function GET() {
 
 export async function DELETE() {
   try {
+    const { requireAuthWithOrg } = await import('@/lib/supabase/auth-helpers');
+    const { prisma } = await import('@/lib/db');
+    
     const { organizationId } = await requireAuthWithOrg();
 
     const connection = await prisma.stripeConnection.findUnique({

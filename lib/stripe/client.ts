@@ -24,6 +24,20 @@ export const STRIPE_OAUTH_CONFIG = {
   scope: 'read_only',
 };
 
+// Get the app URL (works on Vercel and locally)
+function getAppUrl(): string {
+  // Explicit APP_URL takes priority
+  if (process.env.APP_URL) {
+    return process.env.APP_URL;
+  }
+  // Vercel provides this automatically
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  // Fallback for local development
+  return 'http://localhost:3000';
+}
+
 // Generate OAuth authorization URL
 export function getStripeOAuthUrl(state: string): string {
   const params = new URLSearchParams({
@@ -31,7 +45,7 @@ export function getStripeOAuthUrl(state: string): string {
     client_id: STRIPE_OAUTH_CONFIG.clientId,
     scope: STRIPE_OAUTH_CONFIG.scope,
     state,
-    redirect_uri: `${process.env.APP_URL}/api/stripe/callback`,
+    redirect_uri: `${getAppUrl()}/api/stripe/callback`,
   });
 
   return `${STRIPE_OAUTH_CONFIG.authorizeUrl}?${params.toString()}`;

@@ -26,16 +26,12 @@ export const STRIPE_OAUTH_CONFIG = {
 
 // Get the app URL (works on Vercel and locally)
 function getAppUrl(): string {
-  // Explicit APP_URL takes priority
-  if (process.env.APP_URL) {
-    return process.env.APP_URL;
-  }
-  // Vercel provides this automatically
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-  // Fallback for local development
-  return 'http://localhost:3000';
+  const raw =
+    process.env.APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+
+  // Strip any trailing slashes to avoid `//api/stripe/callback`
+  return raw.replace(/\/+$/, '');
 }
 
 // Generate OAuth authorization URL

@@ -19,6 +19,8 @@ import { InsightsFeed } from '@/components/dashboard/insights-feed';
 import { RecommendationsPanel } from '@/components/dashboard/recommendations-panel';
 import { StripeConnection } from '@/components/dashboard/stripe-connection';
 import { formatCurrency, formatPercentAbs } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 
 interface Metrics {
   mrr: number;
@@ -355,6 +357,24 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Stripe Connection */}
         <section className="mb-8">
+          <div className="flex items-center justify-end mb-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleLoadDemo}
+              disabled={isLoadingDemo}
+            >
+              {isLoadingDemo ? (
+                <>
+                  <Spinner size="sm" />
+                  Seeding demo...
+                </>
+              ) : (
+                <>Load Demo Data</>
+              )}
+            </Button>
+          </div>
           <StripeConnection
             isConnected={stripeStatus.connected}
             connection={stripeStatus.connection}

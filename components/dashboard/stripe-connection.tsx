@@ -29,6 +29,8 @@ interface StripeConnectionProps {
   onSync: () => void;
   isConnecting?: boolean;
   isSyncing?: boolean;
+  onLoadDemo?: () => void;
+  isLoadingDemo?: boolean;
 }
 
 export function StripeConnection({
@@ -39,6 +41,8 @@ export function StripeConnection({
   onSync,
   isConnecting,
   isSyncing,
+  onLoadDemo,
+  isLoadingDemo,
 }: StripeConnectionProps) {
   const [showDisconnect, setShowDisconnect] = useState(false);
 
@@ -75,6 +79,27 @@ export function StripeConnection({
             </>
           )}
         </Button>
+        {onLoadDemo && (
+          <Button
+            variant="outline"
+            size="lg"
+            className="mt-3 gap-2"
+            onClick={onLoadDemo}
+            disabled={isLoadingDemo}
+          >
+            {isLoadingDemo ? (
+              <>
+                <Spinner size="sm" />
+                Loading demo...
+              </>
+            ) : (
+              <>
+                <Clock className="h-4 w-4" />
+                Load Demo Data
+              </>
+            )}
+          </Button>
+        )}
         <p className="mt-4 text-xs text-muted-foreground">
           We only request read-only access. Your data is encrypted and never shared.
         </p>

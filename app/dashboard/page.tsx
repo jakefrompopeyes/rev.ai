@@ -85,6 +85,7 @@ export default function DashboardPage() {
   
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isLoadingDemo, setIsLoadingDemo] = useState(false);
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(true);
   const [isLoadingInsights, setIsLoadingInsights] = useState(true);
   const [isLoadingRecs, setIsLoadingRecs] = useState(true);
@@ -238,6 +239,25 @@ export default function DashboardPage() {
     }
   };
 
+  const handleLoadDemo = async () => {
+    setIsLoadingDemo(true);
+    try {
+      const res = await fetch('/api/demo/seed', { method: 'POST' });
+      if (res.ok) {
+        await Promise.all([
+          fetchStripeStatus(),
+          fetchMetrics(),
+          fetchInsights(),
+          fetchRecommendations(),
+        ]);
+      }
+    } catch (error) {
+      console.error('Demo seed failed:', error);
+    } finally {
+      setIsLoadingDemo(false);
+    }
+  };
+
   const handleDismissInsight = async (insightId: string) => {
     try {
       await fetch('/api/insights', {
@@ -343,6 +363,8 @@ export default function DashboardPage() {
             onSync={handleSync}
             isConnecting={isConnecting}
             isSyncing={isSyncing}
+            onLoadDemo={handleLoadDemo}
+            isLoadingDemo={isLoadingDemo}
           />
         </section>
 

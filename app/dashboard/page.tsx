@@ -12,7 +12,7 @@ import {
   Percent,
   AlertTriangle,
   CreditCard,
-  Activity,
+  Activity as ActivityIcon,
 } from 'lucide-react';
 import { MetricCard } from '@/components/dashboard/metric-card';
 import { InsightsFeed } from '@/components/dashboard/insights-feed';
@@ -488,7 +488,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-primary p-2">
-                <Activity className="h-5 w-5 text-primary-foreground" />
+                <ActivityIcon className="h-5 w-5 text-primary-foreground" />
               </div>
               <div>
                 <h1 className="text-xl font-bold tracking-tight">REV.AI</h1>

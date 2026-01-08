@@ -165,7 +165,13 @@ export async function seedDemoDataForOrg(organizationId: string) {
   }
 
   // Sample insights
-  const sampleInsights = [
+  const sampleInsights: {
+    category: 'CHURN' | 'PRICING' | 'REVENUE' | 'GROWTH' | 'EFFICIENCY' | 'ANOMALY';
+    severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    title: string;
+    description: string;
+    confidence: number;
+  }[] = [
     {
       category: 'CHURN',
       severity: 'HIGH',
@@ -181,13 +187,13 @@ export async function seedDemoDataForOrg(organizationId: string) {
       confidence: 0.9,
     },
     {
-      category: 'PAYMENTS',
+      category: 'PRICING',
       severity: 'LOW',
-      title: 'Failed payments at 2.0%',
-      description: 'Add card update nudges and smart retries to recover revenue.',
+      title: 'Annual uptake opportunity',
+      description: 'Offering a 10% annual incentive could improve retention and upfront cash.',
       confidence: 0.78,
     },
-  ] as const;
+  ];
 
   for (const insight of sampleInsights) {
     await prisma.aIInsight.create({

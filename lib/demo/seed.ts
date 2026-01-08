@@ -76,9 +76,7 @@ export async function seedDemoDataForOrg(organizationId: string) {
         mrr: amount,
         arr: amount * 12,
         stripeCreatedAt: subDays(new Date(), 20),
-        customer: {
-          connect: { id: customer.id },
-        },
+        customerId: customer.id,
       },
     });
 
@@ -100,7 +98,7 @@ export async function seedDemoDataForOrg(organizationId: string) {
         periodEnd: subDays(new Date(), -19),
         createdAt: new Date(),
         stripeCreatedAt: subDays(new Date(), 10),
-        customer: { connect: { id: customer.id } },
+        customerId: customer.id,
         subscriptionId: sub.id,
       },
     });
@@ -118,7 +116,7 @@ export async function seedDemoDataForOrg(organizationId: string) {
         fee: 0,
         net: amount,
         stripeCreatedAt: subDays(new Date(), 9),
-        customer: { connect: { id: customer.id } },
+        customerId: customer.id,
       },
     });
   }

@@ -18,6 +18,22 @@ import { MetricCard } from '@/components/dashboard/metric-card';
 import { InsightsFeed } from '@/components/dashboard/insights-feed';
 import { RecommendationsPanel } from '@/components/dashboard/recommendations-panel';
 import { StripeConnection } from '@/components/dashboard/stripe-connection';
+import { RevenueTrendChart } from '@/components/dashboard/revenue-trend-chart';
+import { RevenueWaterfall } from '@/components/dashboard/revenue-waterfall';
+import { PlanDistribution } from '@/components/dashboard/plan-distribution';
+import { DateRangePicker, getDaysFromRange, type DateRange } from '@/components/dashboard/date-range-picker';
+import { ActivityTimeline, generateActivitiesFromMetrics, type Activity } from '@/components/dashboard/activity-timeline';
+import { CustomerHealth, generateMockAtRiskCustomers } from '@/components/dashboard/customer-health';
+import { QuickStats, generateQuickStats } from '@/components/dashboard/quick-stats';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { RevenueForecast } from '@/components/dashboard/revenue-forecast';
+import { GoalTracker } from '@/components/dashboard/goal-tracker';
+import { CohortHeatmap, generateMockCohortData } from '@/components/dashboard/cohort-heatmap';
+import { ExportButton } from '@/components/dashboard/export-button';
+import { NotificationCenter, generateSampleNotifications, type Notification } from '@/components/dashboard/notification-center';
+import { ComparisonToggle } from '@/components/dashboard/comparison-toggle';
+import { KeyboardShortcutsHelp } from '@/components/dashboard/keyboard-shortcuts-help';
+import { useKeyboardShortcuts } from '@/lib/hooks/use-keyboard-shortcuts';
 import { formatCurrency, formatPercentAbs } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -30,6 +46,12 @@ interface Metrics {
   grossChurnRate: number;
   netRevenueRetention: number;
   failedPaymentRate: number;
+  newSubscriptions?: number;
+  canceledSubscriptions?: number;
+  upgrades?: number;
+  downgrades?: number;
+  averageDiscount?: number;
+  planDistribution?: Record<string, number>;
 }
 
 interface MetricsSnapshot {
@@ -73,6 +95,22 @@ interface Recommendation {
   implementedAt?: string;
 }
 
+interface MetricHistoryPoint {
+  date: string;
+  mrr: number;
+  arr: number;
+  activeSubscriptions?: number;
+}
+
+interface WaterfallData {
+  startingMrr: number;
+  newBusiness: number;
+  expansion: number;
+  contraction: number;
+  churn: number;
+  endingMrr: number;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -82,6 +120,8 @@ export default function DashboardPage() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [stripeStatus, setStripeStatus] = useState<StripeStatus>({ connected: false });
   const [metrics, setMetrics] = useState<MetricsSnapshot | null>(null);
+  const [metricsHistory, setMetricsHistory] = useState<MetricHistoryPoint[]>([]);
+  const [waterfallData, setWaterfallData] = useState<WaterfallData | null>(null);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   
@@ -89,8 +129,16 @@ export default function DashboardPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLoadingDemo, setIsLoadingDemo] = useState(false);
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(true);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isLoadingWaterfall, setIsLoadingWaterfall] = useState(true);
   const [isLoadingInsights, setIsLoadingInsights] = useState(true);
   const [isLoadingRecs, setIsLoadingRecs] = useState(true);
+  
+  // New state for enhanced features
+  const [dateRange, setDateRange] = useState<DateRange>('30d');
+  const [comparisonEnabled, setComparisonEnabled] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>(generateSampleNotifications());
+  const [mrrGoal, setMrrGoal] = useState<number>(0);
 
   // Check auth status
   useEffect(() => {
@@ -165,6 +213,37 @@ export default function DashboardPage() {
     }
   }, []);
 
+  const fetchMetricsHistory = useCallback(async (days?: number) => {
+    try {
+      setIsLoadingHistory(true);
+      const daysParam = days ?? getDaysFromRange(dateRange);
+      const res = await fetch(`/api/metrics?view=history&days=${daysParam}`);
+      if (res.ok) {
+        const data = await res.json();
+        setMetricsHistory(data.history || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch metrics history:', error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, [dateRange]);
+
+  const fetchWaterfallData = useCallback(async () => {
+    try {
+      setIsLoadingWaterfall(true);
+      const res = await fetch('/api/metrics?view=waterfall');
+      if (res.ok) {
+        const data = await res.json();
+        setWaterfallData(data.waterfall || null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch waterfall data:', error);
+    } finally {
+      setIsLoadingWaterfall(false);
+    }
+  }, []);
+
   // Check for connection callback
   useEffect(() => {
     const connected = searchParams.get('connected');
@@ -188,10 +267,12 @@ export default function DashboardPage() {
     if (user) {
       fetchStripeStatus();
       fetchMetrics();
+      fetchMetricsHistory();
+      fetchWaterfallData();
       fetchInsights();
       fetchRecommendations();
     }
-  }, [user, fetchStripeStatus, fetchMetrics, fetchInsights, fetchRecommendations]);
+  }, [user, fetchStripeStatus, fetchMetrics, fetchMetricsHistory, fetchWaterfallData, fetchInsights, fetchRecommendations]);
 
   // Actions
   const handleConnect = async () => {
@@ -230,6 +311,8 @@ export default function DashboardPage() {
         await Promise.all([
           fetchStripeStatus(),
           fetchMetrics(),
+          fetchMetricsHistory(),
+          fetchWaterfallData(),
           fetchInsights(),
           fetchRecommendations(),
         ]);
@@ -249,6 +332,8 @@ export default function DashboardPage() {
         await Promise.all([
           fetchStripeStatus(),
           fetchMetrics(),
+          fetchMetricsHistory(),
+          fetchWaterfallData(),
           fetchInsights(),
           fetchRecommendations(),
         ]);
@@ -310,6 +395,83 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
+  const handleDateRangeChange = (range: DateRange) => {
+    setDateRange(range);
+    fetchMetricsHistory(getDaysFromRange(range));
+  };
+
+  // Extract current metrics for use in computed values
+  const current = metrics?.current;
+  const changes = metrics?.changes || {};
+
+  // Compute derived data for new components
+  const activities: Activity[] = current
+    ? generateActivitiesFromMetrics({
+        newSubscriptions: current.newSubscriptions,
+        canceledSubscriptions: current.canceledSubscriptions,
+        upgrades: current.upgrades,
+        downgrades: current.downgrades,
+      })
+    : [];
+
+  const quickStats = current
+    ? generateQuickStats({
+        arpu: current.arpu,
+        netRevenueRetention: current.netRevenueRetention,
+        grossChurnRate: current.grossChurnRate,
+        averageDiscount: current.averageDiscount,
+      })
+    : [];
+
+  const atRiskCustomers = generateMockAtRiskCustomers();
+  const healthScore = current
+    ? Math.max(0, Math.min(100, 100 - (current.grossChurnRate || 0) * 10 - (current.failedPaymentRate || 0) * 5))
+    : 80;
+
+  const cohortData = generateMockCohortData();
+
+  // Export data compilation
+  const exportData = {
+    metrics: current,
+    history: metricsHistory,
+    waterfall: waterfallData,
+    insights: insights,
+    recommendations: recommendations,
+    exportedAt: new Date().toISOString(),
+  };
+
+  // Notification handlers
+  const handleMarkNotificationRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(n => (n.id === id ? { ...n, read: true } : n))
+    );
+  };
+
+  const handleMarkAllNotificationsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const handleDismissNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  // Toggle theme function for keyboard shortcut
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    const isDark = root.classList.contains('dark');
+    root.classList.toggle('dark', !isDark);
+    localStorage.setItem('theme', isDark ? 'light' : 'dark');
+  };
+
+  // Keyboard shortcuts
+  const shortcuts = [
+    { key: 'r', description: 'Refresh data', action: () => handleSync() },
+    { key: 't', description: 'Toggle theme', action: toggleTheme },
+    { key: 'c', description: 'Toggle comparison', action: () => setComparisonEnabled(!comparisonEnabled) },
+  ];
+
+  useKeyboardShortcuts(shortcuts);
+
   if (isAuthLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -317,9 +479,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  const current = metrics?.current;
-  const changes = metrics?.changes || {};
 
   return (
     <div className="min-h-screen bg-background">
@@ -336,13 +495,22 @@ export default function DashboardPage() {
                 <p className="text-xs text-muted-foreground">Revenue Intelligence</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <KeyboardShortcutsHelp shortcuts={shortcuts} />
+              <ExportButton data={exportData} filename="revai-dashboard" />
+              <NotificationCenter
+                notifications={notifications}
+                onMarkAsRead={handleMarkNotificationRead}
+                onMarkAllRead={handleMarkAllNotificationsRead}
+                onDismiss={handleDismissNotification}
+              />
+              <ThemeToggle />
+              <span className="text-sm text-muted-foreground hidden md:inline">
                 {user?.email}
               </span>
               <button
                 onClick={handleSignOut}
-                className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors"
+                className="h-9 w-9 rounded-lg border border-border bg-card flex items-center justify-center hover:bg-muted/50 transition-colors"
                 title="Sign out"
               >
                 <span className="text-sm font-medium text-primary">
@@ -390,11 +558,25 @@ export default function DashboardPage() {
 
         {stripeStatus.connected && (
           <>
+            {/* Quick Stats Strip */}
+            <section className="mb-6">
+              <QuickStats stats={quickStats} isLoading={isLoadingMetrics} />
+            </section>
+
             {/* Section A: Live Revenue Snapshot */}
             <section className="mb-10">
-              <div className="flex items-center gap-2 mb-5">
-                <div className="h-2 w-2 rounded-full bg-emerald-500 pulse-dot" />
-                <h2 className="text-lg font-semibold">Live Revenue Snapshot</h2>
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500 pulse-dot" />
+                  <h2 className="text-lg font-semibold">Live Revenue Snapshot</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ComparisonToggle
+                    enabled={comparisonEnabled}
+                    onChange={setComparisonEnabled}
+                  />
+                  <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
+                </div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -479,6 +661,62 @@ export default function DashboardPage() {
                     {current ? formatPercentAbs(current.failedPaymentRate) : '0%'}
                   </p>
                 </motion.div>
+              </div>
+            </section>
+
+            {/* Section: Revenue Charts */}
+            <section className="mb-10">
+              <div className="flex items-center gap-2 mb-5">
+                <h2 className="text-lg font-semibold">Revenue Analytics</h2>
+              </div>
+              
+              {/* First row: Trend Chart and Waterfall */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <RevenueTrendChart data={metricsHistory} isLoading={isLoadingHistory} />
+                <RevenueWaterfall data={waterfallData} isLoading={isLoadingWaterfall} />
+              </div>
+              
+              {/* Second row: Forecast and Goal Tracker */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                <RevenueForecast
+                  historicalData={metricsHistory}
+                  isLoading={isLoadingHistory}
+                />
+                <GoalTracker
+                  currentMrr={current?.mrr || 0}
+                  targetMrr={mrrGoal}
+                  onTargetChange={setMrrGoal}
+                  isLoading={isLoadingMetrics}
+                />
+              </div>
+              
+              {/* Third row: Plan Distribution, Customer Health, Activity */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+                <PlanDistribution
+                  data={current?.planDistribution || null}
+                  totalMrr={current?.mrr}
+                  isLoading={isLoadingMetrics}
+                />
+                <CustomerHealth
+                  atRiskCustomers={atRiskCustomers}
+                  healthScore={Math.round(healthScore)}
+                  churnRate={current?.grossChurnRate || 0}
+                  failedPaymentRate={current?.failedPaymentRate || 0}
+                  isLoading={isLoadingMetrics}
+                />
+                <ActivityTimeline
+                  activities={activities}
+                  isLoading={isLoadingMetrics}
+                  maxItems={6}
+                />
+              </div>
+
+              {/* Fourth row: Cohort Retention Heatmap */}
+              <div className="mt-6">
+                <CohortHeatmap
+                  data={cohortData}
+                  isLoading={isLoadingMetrics}
+                />
               </div>
             </section>
 

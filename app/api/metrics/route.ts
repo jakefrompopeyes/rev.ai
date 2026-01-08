@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 export async function GET(request: NextRequest) {
   try {
     const { requireAuthWithOrg } = await import('@/lib/supabase/auth-helpers');
-    const { getCurrentMetricsSnapshot, getMetricsHistory } = await import('@/lib/metrics/compute');
+    const { getCurrentMetricsSnapshot, getMetricsHistory, getWaterfallData } = await import('@/lib/metrics/compute');
     
     const { organizationId } = await requireAuthWithOrg();
 
@@ -17,6 +17,11 @@ export async function GET(request: NextRequest) {
     if (view === 'history') {
       const history = await getMetricsHistory(organizationId, days);
       return NextResponse.json({ history });
+    }
+
+    if (view === 'waterfall') {
+      const waterfall = await getWaterfallData(organizationId);
+      return NextResponse.json({ waterfall });
     }
 
     const snapshot = await getCurrentMetricsSnapshot(organizationId);

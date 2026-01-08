@@ -300,6 +300,105 @@ export async function getMetricsHistory(
 }
 
 /**
+ * Get waterfall data for MRR movements
+ */
+export interface WaterfallData {
+  startingMrr: number;
+  newBusiness: number;
+  expansion: number;
+  contraction: number;
+  churn: number;
+  endingMrr: number;
+}
+
+export async function getWaterfallData(organizationId: string): Promise<WaterfallData> {
+  const today = startOfDay(new Date());
+  const monthStart = startOfMonth(today);
+  const prevMonthEnd = subDays(monthStart, 1);
+  const prevMonthStart = startOfMonth(prevMonthEnd);
+
+  // Get starting MRR (end of previous month)
+  const prevMonthMetrics = await prisma.dailyMetrics.findFirst({
+    where: {
+      organizationId,
+      date: { lte: prevMonthEnd },
+    },
+    orderBy: { date: 'desc' },
+  });
+
+  const startingMrr = prevMonthMetrics?.mrr ?? 0;
+
+  // Get current MRR
+  let currentMetrics = await prisma.dailyMetrics.findUnique({
+    where: {
+      organizationId_date: {
+        organizationId,
+        date: today,
+      },
+    },
+  });
+
+  if (!currentMetrics) {
+    await computeDailyMetrics(organizationId, today);
+    currentMetrics = await prisma.dailyMetrics.findUnique({
+      where: {
+        organizationId_date: {
+          organizationId,
+          date: today,
+        },
+      },
+    });
+  }
+
+  const endingMrr = currentMetrics?.mrr ?? 0;
+
+  // New subscriptions this month (new business)
+  const newSubscriptions = await prisma.stripeSubscription.findMany({
+    where: {
+      organizationId,
+      stripeCreatedAt: {
+        gte: monthStart,
+        lte: today,
+      },
+    },
+  });
+
+  const newBusiness = newSubscriptions.reduce((sum, sub) => sum + sub.mrr, 0);
+
+  // Churned subscriptions this month
+  const churnedSubscriptions = await prisma.stripeSubscription.findMany({
+    where: {
+      organizationId,
+      canceledAt: {
+        gte: monthStart,
+        lte: today,
+      },
+    },
+  });
+
+  const churn = churnedSubscriptions.reduce((sum, sub) => sum + sub.mrr, 0);
+
+  // For expansion and contraction, we'd need to track plan changes
+  // For now, we calculate it as the residual
+  const netChange = endingMrr - startingMrr;
+  const accountedChange = newBusiness - churn;
+  const residual = netChange - accountedChange;
+
+  // If residual is positive, it's expansion; if negative, it's contraction
+  const expansion = residual > 0 ? residual : 0;
+  const contraction = residual < 0 ? Math.abs(residual) : 0;
+
+  return {
+    startingMrr,
+    newBusiness,
+    expansion,
+    contraction,
+    churn,
+    endingMrr,
+  };
+}
+
+/**
  * Get current snapshot of all key metrics
  */
 export async function getCurrentMetricsSnapshot(organizationId: string): Promise<{

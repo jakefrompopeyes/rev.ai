@@ -30,79 +30,95 @@ export async function seedDemoDataForOrg(organizationId: string) {
     },
   });
 
-  // Customers
-  const customers = Array.from({ length: 20 }).map((_, idx) => ({
-    externalId: `cus_demo_${idx + 1}`,
-    email: `customer${idx + 1}@example.com`,
-    name: `Demo Customer ${idx + 1}`,
-  }));
-
-  await prisma.stripeCustomer.createMany({
-    data: customers.map((c) => ({
-      organizationId,
-      stripeCustomerId: c.externalId,
-      email: c.email,
-      name: c.name,
-      createdAt: subDays(new Date(), 30),
-    })),
-  });
+  // Customers (create individually to return IDs)
+  const customerRecords = [];
+  for (let i = 0; i < 20; i++) {
+    const stripeId = `cus_demo_${i + 1}`;
+    const customer = await prisma.stripeCustomer.create({
+      data: {
+        organizationId,
+        stripeId,
+        email: `customer${i + 1}@example.com`,
+        stripeCreatedAt: subDays(new Date(), 30),
+        currency: 'usd',
+        delinquent: false,
+      },
+    });
+    customerRecords.push(customer);
+  }
 
   // Subscriptions + invoices + payments
   const planAmounts = [2900, 9900, 19900]; // $29, $99, $199
   const planNames = ['Starter', 'Growth', 'Scale'];
 
-  const createdSubs = [];
-  for (let i = 0; i < customers.length; i++) {
+  for (let i = 0; i < customerRecords.length; i++) {
     const planIndex = i % planAmounts.length;
     const amount = planAmounts[planIndex];
     const planNickname = planNames[planIndex];
-    const subId = `sub_demo_${i + 1}`;
-    const customerId = customers[i].externalId;
+    const subStripeId = `sub_demo_${i + 1}`;
+    const customer = customerRecords[i];
 
     const sub = await prisma.stripeSubscription.create({
       data: {
         organizationId,
-        stripeSubscriptionId: subId,
+        stripeId: subStripeId,
         status: 'active',
+        currentPeriodStart: subDays(new Date(), 20),
+        currentPeriodEnd: subDays(new Date(), -10),
+        cancelAtPeriodEnd: false,
+        startDate: subDays(new Date(), 20),
+        billingCycleAnchor: subDays(new Date(), 20),
         planId: `price_demo_${planIndex + 1}`,
         planNickname,
         planAmount: amount,
         planInterval: 'month',
+        quantity: 1,
         mrr: amount,
-        discountPercent: null,
-        discountAmountOff: null,
-        customer: {
-          connect: { stripeCustomerId_organizationId: { stripeCustomerId: customerId, organizationId } },
-        },
+        arr: amount * 12,
         stripeCreatedAt: subDays(new Date(), 20),
+        customer: {
+          connect: { id: customer.id },
+        },
       },
-      include: { customer: true },
     });
-    createdSubs.push(sub);
 
-    // Invoice + payment for the sub
-    const invoiceId = `in_demo_${i + 1}`;
+    // Invoice
+    const invoiceStripeId = `in_demo_${i + 1}`;
     await prisma.stripeInvoice.create({
       data: {
         organizationId,
-        stripeInvoiceId: invoiceId,
-        customerId: customerId,
-        subscriptionId: subId,
+        stripeId: invoiceStripeId,
+        status: 'paid',
         amountDue: amount,
         amountPaid: amount,
-        status: 'paid',
+        amountRemaining: 0,
+        subtotal: amount,
+        total: amount,
+        tax: 0,
+        discountAmount: 0,
+        periodStart: subDays(new Date(), 11),
+        periodEnd: subDays(new Date(), -19),
+        createdAt: new Date(),
         stripeCreatedAt: subDays(new Date(), 10),
+        customer: { connect: { id: customer.id } },
+        subscriptionId: sub.id,
       },
     });
 
+    // Payment
+    const paymentStripeId = `pay_demo_${i + 1}`;
     await prisma.stripePayment.create({
       data: {
         organizationId,
-        stripePaymentId: `pay_demo_${i + 1}`,
-        customerId,
-        amount: amount,
+        stripeId: paymentStripeId,
         status: 'succeeded',
+        amount,
+        amountRefunded: 0,
+        currency: 'usd',
+        fee: 0,
+        net: amount,
         stripeCreatedAt: subDays(new Date(), 9),
+        customer: { connect: { id: customer.id } },
       },
     });
   }
@@ -125,16 +141,22 @@ export async function seedDemoDataForOrg(organizationId: string) {
         date,
         mrr,
         arr: mrr * 12,
-        arpu: mrr / activeSubscriptions,
+        arpu: Math.round(mrr / activeSubscriptions),
         activeSubscriptions,
         newSubscriptions: 6 + Math.floor(Math.random() * 3),
         canceledSubscriptions: 3 + Math.floor(Math.random() * 2),
+        upgrades: 2 + Math.floor(Math.random() * 2),
+        downgrades: 1,
         grossChurnRate: churnRate,
         revenueChurnRate: churnRate * 0.8,
         netRevenueRetention: nrr,
+        failedPayments: 3 + Math.floor(Math.random() * 3),
+        successfulPayments: 40 + Math.floor(Math.random() * 10),
         failedPaymentRate,
+        totalPaymentVolume: mrr + 5000,
         averageDiscount: 12 + Math.random() * 4,
-        discountLeakage: 8 + Math.random() * 3,
+        effectivePrice: Math.round((mrr / activeSubscriptions) * 0.94),
+        discountLeakage: 800 + Math.floor(Math.random() * 300),
         planDistribution: {
           Starter: 0.55,
           Growth: 0.32,

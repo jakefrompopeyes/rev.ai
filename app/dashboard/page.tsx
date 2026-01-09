@@ -453,12 +453,14 @@ export default function DashboardPage() {
       })
     : [];
 
-  const atRiskCustomers = generateMockAtRiskCustomers();
+  // Only use mock data when Stripe is not connected
+  const atRiskCustomers = stripeStatus.connected ? [] : generateMockAtRiskCustomers();
   const healthScore = current
     ? Math.max(0, Math.min(100, 100 - (current.grossChurnRate || 0) * 10 - (current.failedPaymentRate || 0) * 5))
     : 80;
 
-  const cohortData = generateMockCohortData();
+  // Only use mock cohort data when Stripe is not connected
+  const cohortData = stripeStatus.connected ? [] : generateMockCohortData();
 
   // Export data compilation
   const exportData = {

@@ -14,21 +14,32 @@ export function createConnectedStripeClient(accessToken: string): Stripe {
   });
 }
 
+// Check if we're in test/development mode
+export function isTestMode(): boolean {
+  const secretKey = process.env.STRIPE_SECRET_KEY || '';
+  return secretKey.startsWith('sk_test_') || secretKey.startsWith('rk_test_');
+}
+
+// Get the appropriate Client ID based on mode
+function getClientId(): string {
+  if (isTestMode()) {
+    // Use test client ID if available, otherwise fall back to main client ID
+    return process.env.STRIPE_CLIENT_ID_TEST || process.env.STRIPE_CLIENT_ID || '';
+  }
+  return process.env.STRIPE_CLIENT_ID || '';
+}
+
 // OAuth Configuration
 export const STRIPE_OAUTH_CONFIG = {
-  clientId: process.env.STRIPE_CLIENT_ID!,
+  get clientId() {
+    return getClientId();
+  },
   authorizeUrl: 'https://connect.stripe.com/oauth/authorize',
   tokenUrl: 'https://connect.stripe.com/oauth/token',
   deauthorizeUrl: 'https://connect.stripe.com/oauth/deauthorize',
   // Stripe requires read_write scope for Connect Standard (read-only access to data still works)
   scope: 'read_write',
 };
-
-// Check if we're in test/development mode
-export function isTestMode(): boolean {
-  const secretKey = process.env.STRIPE_SECRET_KEY || '';
-  return secretKey.startsWith('sk_test_') || secretKey.startsWith('rk_test_');
-}
 
 // Get the app URL (works on Vercel and locally)
 function getAppUrl(): string {

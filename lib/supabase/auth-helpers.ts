@@ -2,6 +2,11 @@ import { createClient, getUser } from './server';
 import { prisma } from '@/lib/db';
 
 /**
+ * Development mode fallback org ID
+ */
+const DEV_DEMO_ORG_ID = 'demo-org-001';
+
+/**
  * Get the organization ID for the current authenticated user
  */
 export async function getOrganizationId(): Promise<string | null> {
@@ -22,7 +27,7 @@ export async function getOrganizationId(): Promise<string | null> {
 
 /**
  * Require authentication and return organization ID
- * Throws if not authenticated
+ * In development mode, falls back to demo org if not authenticated
  */
 export async function requireAuthWithOrg(): Promise<{
   userId: string;
@@ -32,6 +37,14 @@ export async function requireAuthWithOrg(): Promise<{
   const user = await getUser();
   
   if (!user?.email) {
+    // Development fallback: use demo org
+    if (process.env.NODE_ENV !== 'production') {
+      return {
+        userId: 'demo-user',
+        email: 'demo@revai.com',
+        organizationId: DEV_DEMO_ORG_ID,
+      };
+    }
     throw new Error('Unauthorized');
   }
 

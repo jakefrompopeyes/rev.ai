@@ -104,6 +104,32 @@ export async function computeDailyMetrics(
     },
   });
 
+  // Count upgrades and downgrades from subscription events
+  const todayStart = targetDate;
+  const todayEnd = new Date(targetDate.getTime() + 24 * 60 * 60 * 1000);
+
+  const upgradesCount = await prisma.subscriptionEvent.count({
+    where: {
+      organizationId,
+      type: 'UPGRADE',
+      occurredAt: {
+        gte: todayStart,
+        lt: todayEnd,
+      },
+    },
+  });
+
+  const downgradesCount = await prisma.subscriptionEvent.count({
+    where: {
+      organizationId,
+      type: 'DOWNGRADE',
+      occurredAt: {
+        gte: todayStart,
+        lt: todayEnd,
+      },
+    },
+  });
+
   // Get previous month's data for churn calculation
   const prevMonthStart = startOfMonth(subDays(monthStart, 1));
   const prevMonthEnd = endOfMonth(subDays(monthStart, 1));
@@ -217,8 +243,8 @@ export async function computeDailyMetrics(
     activeSubscriptions: activeCount,
     newSubscriptions,
     canceledSubscriptions,
-    upgrades: 0, // TODO: Detect upgrades
-    downgrades: 0, // TODO: Detect downgrades
+    upgrades: upgradesCount,
+    downgrades: downgradesCount,
     grossChurnRate,
     revenueChurnRate,
     netRevenueRetention,
@@ -315,7 +341,6 @@ export async function getWaterfallData(organizationId: string): Promise<Waterfal
   const today = startOfDay(new Date());
   const monthStart = startOfMonth(today);
   const prevMonthEnd = subDays(monthStart, 1);
-  const prevMonthStart = startOfMonth(prevMonthEnd);
 
   // Get starting MRR (end of previous month)
   const prevMonthMetrics = await prisma.dailyMetrics.findFirst({
@@ -352,46 +377,50 @@ export async function getWaterfallData(organizationId: string): Promise<Waterfal
 
   const endingMrr = currentMetrics?.mrr ?? 0;
 
-  // New subscriptions this month (new business)
-  const newSubscriptions = await prisma.stripeSubscription.findMany({
+  // Get subscription events for this month to calculate waterfall components
+  const monthlyEvents = await prisma.subscriptionEvent.findMany({
     where: {
       organizationId,
-      stripeCreatedAt: {
+      occurredAt: {
         gte: monthStart,
         lte: today,
       },
     },
   });
 
-  const newBusiness = newSubscriptions.reduce((sum, sub) => sum + sub.mrr, 0);
+  // Calculate new business from NEW events
+  const newBusiness = monthlyEvents
+    .filter(e => e.type === 'NEW')
+    .reduce((sum, e) => sum + e.mrrDelta, 0);
 
-  // Churned subscriptions this month
-  const churnedSubscriptions = await prisma.stripeSubscription.findMany({
-    where: {
-      organizationId,
-      canceledAt: {
-        gte: monthStart,
-        lte: today,
-      },
-    },
-  });
+  // Calculate expansion from UPGRADE events
+  const expansion = monthlyEvents
+    .filter(e => e.type === 'UPGRADE')
+    .reduce((sum, e) => sum + e.mrrDelta, 0);
 
-  const churn = churnedSubscriptions.reduce((sum, sub) => sum + sub.mrr, 0);
+  // Calculate contraction from DOWNGRADE events (mrrDelta is negative, so we abs it)
+  const contraction = Math.abs(
+    monthlyEvents
+      .filter(e => e.type === 'DOWNGRADE')
+      .reduce((sum, e) => sum + e.mrrDelta, 0)
+  );
 
-  // For expansion and contraction, we'd need to track plan changes
-  // For now, we calculate it as the residual
-  const netChange = endingMrr - startingMrr;
-  const accountedChange = newBusiness - churn;
-  const residual = netChange - accountedChange;
+  // Calculate churn from CANCELED events (mrrDelta is negative, so we abs it)
+  const churn = Math.abs(
+    monthlyEvents
+      .filter(e => e.type === 'CANCELED')
+      .reduce((sum, e) => sum + e.mrrDelta, 0)
+  );
 
-  // If residual is positive, it's expansion; if negative, it's contraction
-  const expansion = residual > 0 ? residual : 0;
-  const contraction = residual < 0 ? Math.abs(residual) : 0;
+  // Add reactivations to expansion
+  const reactivations = monthlyEvents
+    .filter(e => e.type === 'REACTIVATED')
+    .reduce((sum, e) => sum + e.mrrDelta, 0);
 
   return {
     startingMrr,
     newBusiness,
-    expansion,
+    expansion: expansion + reactivations,
     contraction,
     churn,
     endingMrr,

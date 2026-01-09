@@ -377,7 +377,7 @@ Return JSON array with insights. Each insight must have:
 Focus on non-obvious insights. Be specific about numbers and recommendations.`;
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'system',

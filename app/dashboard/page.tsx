@@ -30,9 +30,13 @@ import { RevenueForecast } from '@/components/dashboard/revenue-forecast';
 import { GoalTracker } from '@/components/dashboard/goal-tracker';
 import { CohortHeatmap, generateMockCohortData } from '@/components/dashboard/cohort-heatmap';
 import { ExportButton } from '@/components/dashboard/export-button';
+import { PricingOptimizer } from '@/components/dashboard/pricing-optimizer';
+import { PricingCopilotChat } from '@/components/dashboard/pricing-copilot-chat';
+import { ABTestTracker } from '@/components/dashboard/ab-test-tracker';
 import { NotificationCenter, generateSampleNotifications, type Notification } from '@/components/dashboard/notification-center';
 import { ComparisonToggle } from '@/components/dashboard/comparison-toggle';
 import { KeyboardShortcutsHelp } from '@/components/dashboard/keyboard-shortcuts-help';
+import { SettingsPanel } from '@/components/dashboard/settings-panel';
 import { useKeyboardShortcuts } from '@/lib/hooks/use-keyboard-shortcuts';
 import { formatCurrency, formatPercentAbs } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -139,6 +143,7 @@ export default function DashboardPage() {
   const [comparisonEnabled, setComparisonEnabled] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>(generateSampleNotifications());
   const [mrrGoal, setMrrGoal] = useState<number>(0);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Check auth status
   useEffect(() => {
@@ -262,9 +267,10 @@ export default function DashboardPage() {
     }
   }, [searchParams, router, fetchStripeStatus]);
 
-  // Fetch data on mount when authenticated
+  // Fetch data on mount when authenticated (or in dev mode)
   useEffect(() => {
-    if (user) {
+    const isDev = process.env.NODE_ENV === 'development';
+    if (user || isDev) {
       fetchStripeStatus();
       fetchMetrics();
       fetchMetricsHistory();
@@ -509,11 +515,11 @@ export default function DashboardPage() {
                 {user?.email}
               </span>
               <button
-                onClick={handleSignOut}
-                className="h-9 w-9 rounded-lg border border-border bg-card flex items-center justify-center hover:bg-muted/50 transition-colors"
-                title="Sign out"
+                onClick={() => setIsSettingsOpen(true)}
+                className="h-9 w-9 rounded-lg border border-border bg-card flex items-center justify-center hover:bg-muted/50 transition-colors group relative"
+                title="Settings"
               >
-                <span className="text-sm font-medium text-primary">
+                <span className="text-sm font-medium text-primary group-hover:scale-110 transition-transform">
                   {user?.user_metadata?.name?.[0] || user?.email?.[0]?.toUpperCase()}
                 </span>
               </button>
@@ -678,10 +684,7 @@ export default function DashboardPage() {
               
               {/* Second row: Forecast and Goal Tracker */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-                <RevenueForecast
-                  historicalData={metricsHistory}
-                  isLoading={isLoadingHistory}
-                />
+                <RevenueForecast />
                 <GoalTracker
                   currentMrr={current?.mrr || 0}
                   targetMrr={mrrGoal}
@@ -720,6 +723,16 @@ export default function DashboardPage() {
               </div>
             </section>
 
+            {/* Section: AI Pricing Optimizer */}
+            <section className="mb-10">
+              <PricingOptimizer />
+            </section>
+
+            {/* Section: A/B Test Tracker */}
+            <section className="mb-10">
+              <ABTestTracker />
+            </section>
+
             {/* Sections B & C: Insights and Recommendations */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Section B: AI Insights Feed */}
@@ -756,6 +769,17 @@ export default function DashboardPage() {
           </>
         )}
       </main>
+
+      {/* Settings Panel */}
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        user={user}
+        onSignOut={handleSignOut}
+      />
+
+      {/* Pricing Copilot Chat (Floating) */}
+      {stripeStatus.connected && <PricingCopilotChat />}
     </div>
   );
 }

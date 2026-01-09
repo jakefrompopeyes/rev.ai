@@ -156,7 +156,7 @@ async function syncCustomers(stripe: Stripe, organizationId: string): Promise<nu
 }
 
 /**
- * Sync Stripe subscriptions
+ * Sync Stripe subscriptions and track plan changes
  */
 async function syncSubscriptions(stripe: Stripe, organizationId: string): Promise<number> {
   let count = 0;
@@ -198,7 +198,18 @@ async function syncSubscriptions(stripe: Stripe, organizationId: string): Promis
       const discountPercent = discount?.coupon?.percent_off ?? null;
       const discountAmountOff = discount?.coupon?.amount_off ?? null;
 
-      await prisma.stripeSubscription.upsert({
+      // Check if this subscription exists and track changes
+      const existingSubscription = await prisma.stripeSubscription.findUnique({
+        where: {
+          organizationId_stripeId: {
+            organizationId,
+            stripeId: sub.id,
+          },
+        },
+      });
+
+      // Upsert the subscription
+      const upsertedSubscription = await prisma.stripeSubscription.upsert({
         where: {
           organizationId_stripeId: {
             organizationId,
@@ -256,6 +267,22 @@ async function syncSubscriptions(stripe: Stripe, organizationId: string): Promis
           metadata: sub.metadata as object,
         },
       });
+
+      // Track subscription events (plan changes, cancellations, reactivations)
+      await trackSubscriptionEvent(
+        organizationId,
+        upsertedSubscription.id,
+        existingSubscription,
+        {
+          mrr,
+          planId: price?.id ?? null,
+          planNickname: price?.nickname ?? null,
+          quantity,
+          status: sub.status,
+          canceledAt: sub.canceled_at ? new Date(sub.canceled_at * 1000) : null,
+        }
+      );
+
       count++;
     }
 
@@ -266,6 +293,119 @@ async function syncSubscriptions(stripe: Stripe, organizationId: string): Promis
   }
 
   return count;
+}
+
+/**
+ * Track subscription changes and create events for upgrades, downgrades, etc.
+ */
+async function trackSubscriptionEvent(
+  organizationId: string,
+  subscriptionId: string,
+  existing: {
+    id: string;
+    mrr: number;
+    planId: string | null;
+    planNickname: string | null;
+    quantity: number;
+    status: string;
+    canceledAt: Date | null;
+  } | null,
+  current: {
+    mrr: number;
+    planId: string | null;
+    planNickname: string | null;
+    quantity: number;
+    status: string;
+    canceledAt: Date | null;
+  }
+): Promise<void> {
+  // New subscription
+  if (!existing) {
+    await prisma.subscriptionEvent.create({
+      data: {
+        organizationId,
+        subscriptionId,
+        type: 'NEW',
+        previousMrr: 0,
+        newMrr: current.mrr,
+        mrrDelta: current.mrr,
+        previousPlanId: null,
+        previousPlanNickname: null,
+        newPlanId: current.planId,
+        newPlanNickname: current.planNickname,
+        previousQuantity: null,
+        newQuantity: current.quantity,
+      },
+    });
+    return;
+  }
+
+  // Cancellation
+  if (!existing.canceledAt && current.canceledAt) {
+    await prisma.subscriptionEvent.create({
+      data: {
+        organizationId,
+        subscriptionId,
+        type: 'CANCELED',
+        previousMrr: existing.mrr,
+        newMrr: 0,
+        mrrDelta: -existing.mrr,
+        previousPlanId: existing.planId,
+        previousPlanNickname: existing.planNickname,
+        newPlanId: current.planId,
+        newPlanNickname: current.planNickname,
+        previousQuantity: existing.quantity,
+        newQuantity: current.quantity,
+      },
+    });
+    return;
+  }
+
+  // Reactivation (was canceled, now active again)
+  if (existing.canceledAt && !current.canceledAt && current.status === 'active') {
+    await prisma.subscriptionEvent.create({
+      data: {
+        organizationId,
+        subscriptionId,
+        type: 'REACTIVATED',
+        previousMrr: 0,
+        newMrr: current.mrr,
+        mrrDelta: current.mrr,
+        previousPlanId: existing.planId,
+        previousPlanNickname: existing.planNickname,
+        newPlanId: current.planId,
+        newPlanNickname: current.planNickname,
+        previousQuantity: existing.quantity,
+        newQuantity: current.quantity,
+      },
+    });
+    return;
+  }
+
+  // MRR change detection (upgrade or downgrade)
+  const mrrDelta = current.mrr - existing.mrr;
+  
+  // Only track if there's a meaningful change (> $1 to avoid rounding issues)
+  if (Math.abs(mrrDelta) > 100) {
+    const eventType = mrrDelta > 0 ? 'UPGRADE' : 'DOWNGRADE';
+    
+    await prisma.subscriptionEvent.create({
+      data: {
+        organizationId,
+        subscriptionId,
+        type: eventType,
+        previousMrr: existing.mrr,
+        newMrr: current.mrr,
+        mrrDelta,
+        previousPlanId: existing.planId,
+        previousPlanNickname: existing.planNickname,
+        newPlanId: current.planId,
+        newPlanNickname: current.planNickname,
+        previousQuantity: existing.quantity,
+        newQuantity: current.quantity,
+      },
+    });
+  }
 }
 
 /**

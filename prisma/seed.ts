@@ -2,29 +2,55 @@
  * Database Seed Script
  * Run via: npm run db:seed
  * 
- * Creates sample data for development and testing.
+ * Creates realistic demo data for a fast-growing developer tools SaaS
  */
 
 import { PrismaClient, InsightCategory, InsightSeverity, RiskLevel } from '@prisma/client';
-import { subDays, format } from 'date-fns';
+import { subDays, format, getDay, startOfDay } from 'date-fns';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log('🌱 Seeding database...');
+// Modern startup/tech company names
+const companyNames = [
+  'Vercel Labs', 'Supabase Co', 'Railway Inc', 'Planetscale', 'Neon Database',
+  'Resend HQ', 'Clerk Auth', 'Upstash', 'Axiom Data', 'Tinybird Analytics',
+  'Inngest', 'Trigger.dev', 'Dub Links', 'Cal.com', 'Documenso',
+  'Papermark', 'Formbricks', 'Hanko Auth', 'Unkey API', 'OpenStatus',
+  'Polar.sh', 'Midday Finance', 'Twenty CRM', 'Infisical Secrets', 'Hoppscotch',
+  'Appwrite Cloud', 'Convex Backend', 'Turso Edge', 'Xata DB', 'CockroachDB',
+  'TimescaleDB', 'Questdb', 'ClickHouse Inc', 'Materialize', 'RisingWave',
+  'Redpanda Data', 'Warpstream', 'Estuary Flow', 'Airbyte Cloud', 'Fivetran',
+  'Hightouch', 'Census Data', 'Amplitude', 'Mixpanel', 'PostHog',
+  'Plausible', 'Fathom Analytics', 'SimpleAnalytics', 'Pirsch', 'Umami'
+];
 
-  // Create a demo organization and user
+const firstNames = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Quinn', 'Avery', 'Cameron', 'Drew'];
+const lastNames = ['Park', 'Kim', 'Lee', 'Nakamura', 'Singh', 'Patel', 'Andersen', 'Müller', 'Costa', 'Russo'];
+
+function generateId(length: number): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+async function main() {
+  console.log('🌱 Seeding database with growth-stage SaaS data...');
+
+  // Create demo organization
   const org = await prisma.organization.upsert({
     where: { id: 'demo-org-001' },
     update: {},
     create: {
       id: 'demo-org-001',
-      name: 'Demo Company',
+      name: 'DevTools Pro',
       users: {
         create: {
           email: 'demo@revai.com',
           name: 'Demo User',
-          hashedPassword: 'demo123', // In production, use bcrypt
+          hashedPassword: 'demo123',
         },
       },
     },
@@ -34,275 +60,456 @@ async function main() {
   console.log(`✓ Created organization: ${org.name}`);
   console.log(`  User: ${org.users[0].email}`);
 
-  // Create mock Stripe connection (for UI testing without actual Stripe)
-  await prisma.stripeConnection.upsert({
-    where: { organizationId: org.id },
-    update: {},
-    create: {
+  // Clean existing data for fresh seed
+  await prisma.aIRecommendation.deleteMany({ where: { organizationId: org.id } });
+  await prisma.aIInsight.deleteMany({ where: { organizationId: org.id } });
+  await prisma.dailyMetrics.deleteMany({ where: { organizationId: org.id } });
+  await prisma.subscriptionEvent.deleteMany({ where: { organizationId: org.id } });
+  await prisma.stripePayment.deleteMany({ where: { organizationId: org.id } });
+  await prisma.stripeInvoice.deleteMany({ where: { organizationId: org.id } });
+  await prisma.stripeSubscription.deleteMany({ where: { organizationId: org.id } });
+  await prisma.stripeCustomer.deleteMany({ where: { organizationId: org.id } });
+  await prisma.stripeConnection.deleteMany({ where: { organizationId: org.id } });
+
+  // Stripe connection
+  await prisma.stripeConnection.create({
+    data: {
       organizationId: org.id,
-      stripeAccountId: 'acct_demo_123456',
+      stripeAccountId: `acct_demo_${generateId(8)}`,
       accessToken: 'demo_access_token',
       livemode: false,
+      scope: 'read_only',
       lastSyncAt: new Date(),
       lastSyncStatus: 'success',
     },
   });
 
-  console.log('✓ Created mock Stripe connection');
+  console.log('✓ Created Stripe connection');
 
-  // Create mock customers
+  // Usage-based pricing tiers
+  const plans = [
+    { id: 'price_hobby', name: 'Hobby', amount: 0, weight: 0.25 },           // Free tier
+    { id: 'price_pro', name: 'Pro', amount: 2000, weight: 0.42 },            // $20/mo
+    { id: 'price_team', name: 'Team', amount: 7500, weight: 0.22 },          // $75/mo
+    { id: 'price_scale', name: 'Scale', amount: 25000, weight: 0.08 },       // $250/mo
+    { id: 'price_enterprise', name: 'Enterprise', amount: 100000, weight: 0.03 }, // $1000/mo
+  ];
+
+  // Create 100 customers
   const customers = [];
-  for (let i = 0; i < 50; i++) {
-    const customer = await prisma.stripeCustomer.upsert({
-      where: {
-        organizationId_stripeId: {
-          organizationId: org.id,
-          stripeId: `cus_demo_${i.toString().padStart(3, '0')}`,
-        },
-      },
-      update: {},
-      create: {
+  for (let i = 0; i < 100; i++) {
+    const companyName = companyNames[i % companyNames.length];
+    const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+    const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+    const domain = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    const customer = await prisma.stripeCustomer.create({
+      data: {
         organizationId: org.id,
-        stripeId: `cus_demo_${i.toString().padStart(3, '0')}`,
-        email: `cu***@example${i}.com`,
-        stripeCreatedAt: subDays(new Date(), Math.floor(Math.random() * 365)),
+        stripeId: `cus_${generateId(14)}`,
+        email: `${firstName.toLowerCase()}@${domain}.dev`,
+        stripeCreatedAt: subDays(new Date(), Math.floor(Math.pow(Math.random(), 0.5) * 90)),
         currency: 'usd',
-        delinquent: Math.random() < 0.05,
+        delinquent: Math.random() < 0.02,
+        metadata: { company: companyName, contact: `${firstName} ${lastName}` },
       },
     });
     customers.push(customer);
   }
 
-  console.log(`✓ Created ${customers.length} mock customers`);
+  console.log(`✓ Created ${customers.length} customers`);
 
-  // Create mock subscriptions with different plans
-  const plans = [
-    { id: 'price_starter', name: 'Starter', amount: 2900, interval: 'month' },
-    { id: 'price_pro', name: 'Pro', amount: 9900, interval: 'month' },
-    { id: 'price_enterprise', name: 'Enterprise', amount: 29900, interval: 'month' },
-    { id: 'price_pro_annual', name: 'Pro (Annual)', amount: 99900, interval: 'year' },
-  ];
-
-  let subscriptionCount = 0;
+  // Create subscriptions
+  const subscriptions = [];
   for (const customer of customers) {
-    const plan = plans[Math.floor(Math.random() * plans.length)];
-    const hasDiscount = Math.random() < 0.3;
-    const discountPercent = hasDiscount ? [10, 15, 20, 25, 30][Math.floor(Math.random() * 5)] : null;
+    const rand = Math.random();
+    let cumWeight = 0;
+    let selectedPlan = plans[0];
+    for (const plan of plans) {
+      cumWeight += plan.weight;
+      if (rand <= cumWeight) {
+        selectedPlan = plan;
+        break;
+      }
+    }
+
+    let quantity = 1;
+    if (selectedPlan.name === 'Team') quantity = Math.floor(Math.random() * 5) + 3;
+    if (selectedPlan.name === 'Scale') quantity = Math.floor(Math.random() * 8) + 5;
+    if (selectedPlan.name === 'Enterprise') quantity = Math.floor(Math.random() * 15) + 10;
+
+    const amount = selectedPlan.amount * quantity;
+    const startDaysAgo = Math.floor(Math.pow(Math.random(), 0.5) * 90);
     
-    const isCanceled = Math.random() < 0.15;
-    const startDate = subDays(new Date(), Math.floor(Math.random() * 300) + 30);
+    // Status distribution
+    const statusRand = Math.random();
+    let status = 'active';
+    if (selectedPlan.name === 'Hobby') {
+      status = statusRand < 0.12 ? 'canceled' : 'active';
+    } else {
+      status = statusRand < 0.05 ? 'canceled' : statusRand < 0.08 ? 'past_due' : 'active';
+    }
 
-    const mrr = plan.interval === 'year' 
-      ? Math.round(plan.amount / 12)
-      : plan.amount;
+    const mrr = status === 'canceled' || selectedPlan.amount === 0 ? 0 : amount;
+    const hasDiscount = Math.random() < 0.15;
+    const discountPercent = hasDiscount ? [10, 15, 20][Math.floor(Math.random() * 3)] : null;
+    const effectiveMrr = discountPercent ? Math.round(mrr * (1 - discountPercent / 100)) : mrr;
 
-    await prisma.stripeSubscription.upsert({
-      where: {
-        organizationId_stripeId: {
-          organizationId: org.id,
-          stripeId: `sub_demo_${subscriptionCount.toString().padStart(3, '0')}`,
-        },
-      },
-      update: {},
-      create: {
+    const sub = await prisma.stripeSubscription.create({
+      data: {
         organizationId: org.id,
         customerId: customer.id,
-        stripeId: `sub_demo_${subscriptionCount.toString().padStart(3, '0')}`,
-        status: isCanceled ? 'canceled' : 'active',
-        currentPeriodStart: subDays(new Date(), Math.floor(Math.random() * 30)),
-        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        startDate,
-        billingCycleAnchor: startDate,
-        planId: plan.id,
-        planNickname: plan.name,
-        planAmount: plan.amount,
-        planInterval: plan.interval,
+        stripeId: `sub_${generateId(14)}`,
+        status,
+        currentPeriodStart: subDays(new Date(), startDaysAgo % 30),
+        currentPeriodEnd: subDays(new Date(), (startDaysAgo % 30) - 30),
+        cancelAtPeriodEnd: Math.random() < 0.04,
+        startDate: subDays(new Date(), startDaysAgo),
+        billingCycleAnchor: subDays(new Date(), startDaysAgo),
+        planId: selectedPlan.id,
+        planNickname: selectedPlan.name,
+        planAmount: selectedPlan.amount,
+        planInterval: 'month',
         discountPercent,
-        quantity: 1,
-        mrr: discountPercent ? Math.round(mrr * (1 - discountPercent / 100)) : mrr,
-        arr: discountPercent ? Math.round(mrr * 12 * (1 - discountPercent / 100)) : mrr * 12,
-        stripeCreatedAt: startDate,
-        canceledAt: isCanceled ? subDays(new Date(), Math.floor(Math.random() * 30)) : null,
+        quantity,
+        mrr: effectiveMrr,
+        arr: effectiveMrr * 12,
+        stripeCreatedAt: subDays(new Date(), startDaysAgo),
+        canceledAt: status === 'canceled' ? subDays(new Date(), Math.floor(Math.random() * 20)) : null,
       },
     });
-    subscriptionCount++;
+    subscriptions.push({ ...sub, plan: selectedPlan });
+
+    // Create NEW event for paid subscriptions
+    if (selectedPlan.amount > 0) {
+      await prisma.subscriptionEvent.create({
+        data: {
+          organizationId: org.id,
+          subscriptionId: sub.id,
+          type: 'NEW',
+          previousMrr: 0,
+          newMrr: amount,
+          mrrDelta: amount,
+          newPlanId: selectedPlan.id,
+          newPlanNickname: selectedPlan.name,
+          newQuantity: quantity,
+          occurredAt: subDays(new Date(), startDaysAgo),
+        },
+      });
+    }
   }
 
-  console.log(`✓ Created ${subscriptionCount} mock subscriptions`);
+  console.log(`✓ Created ${subscriptions.length} subscriptions`);
 
-  // Create mock daily metrics for the past 90 days
-  let baseMrr = 3500000; // $35,000 starting MRR
-  
-  for (let i = 90; i >= 0; i--) {
-    const date = subDays(new Date(), i);
-    
-    // Add some growth with variance
-    baseMrr += Math.floor(Math.random() * 50000 - 10000);
-    baseMrr = Math.max(baseMrr, 3000000); // Floor at $30k
-    
-    const activeSubscriptions = Math.floor(baseMrr / 7500); // Approx $75 ARPU
-    const churnRate = 2.5 + (Math.random() * 2 - 1);
-    const discountLeakage = Math.floor(baseMrr * (Math.random() * 0.12 + 0.05));
+  // Create payments for last 60 days
+  let paymentCount = 0;
+  for (let day = 60; day >= 0; day--) {
+    const date = subDays(new Date(), day);
+    const dayOfWeek = getDay(date);
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const dailyTransactions = isWeekend ? Math.floor(Math.random() * 4) + 2 : Math.floor(Math.random() * 10) + 5;
 
-    await prisma.dailyMetrics.upsert({
-      where: {
-        organizationId_date: {
+    for (let t = 0; t < dailyTransactions; t++) {
+      const sub = subscriptions[Math.floor(Math.random() * subscriptions.length)];
+      if (!sub || sub.status === 'canceled' || sub.plan.amount === 0) continue;
+
+      const amount = sub.planAmount * (sub.quantity || 1);
+      const paymentFailed = Math.random() < 0.02;
+
+      await prisma.stripeInvoice.create({
+        data: {
           organizationId: org.id,
-          date,
+          stripeId: `in_${generateId(14)}`,
+          status: paymentFailed ? 'open' : 'paid',
+          amountDue: amount,
+          amountPaid: paymentFailed ? 0 : amount,
+          amountRemaining: paymentFailed ? amount : 0,
+          subtotal: amount,
+          total: amount,
+          tax: 0,
+          discountAmount: Math.random() < 0.1 ? Math.floor(amount * 0.15) : 0,
+          periodStart: subDays(date, 30),
+          periodEnd: date,
+          stripeCreatedAt: date,
+          customerId: sub.customerId,
+          subscriptionId: sub.id,
         },
+      });
+
+      await prisma.stripePayment.create({
+        data: {
+          organizationId: org.id,
+          stripeId: `pi_${generateId(14)}`,
+          status: paymentFailed ? 'failed' : 'succeeded',
+          amount,
+          amountRefunded: 0,
+          currency: 'usd',
+          fee: Math.floor(amount * 0.029 + 30),
+          net: paymentFailed ? 0 : amount - Math.floor(amount * 0.029 + 30),
+          stripeCreatedAt: date,
+          customerId: sub.customerId,
+        },
+      });
+      paymentCount++;
+    }
+  }
+
+  console.log(`✓ Created ${paymentCount} payments`);
+
+  // Create upgrade events
+  const activeSubscriptions = subscriptions.filter(s => s.status === 'active' && s.plan.amount > 0);
+  let eventCount = 0;
+
+  for (let i = 0; i < 15; i++) {
+    const sub = activeSubscriptions[Math.floor(Math.random() * activeSubscriptions.length)];
+    if (!sub) continue;
+    
+    const currentIndex = plans.findIndex(p => p.id === sub.planId);
+    if (currentIndex > 0 && currentIndex < plans.length - 1) {
+      const newPlan = plans[currentIndex + 1];
+      await prisma.subscriptionEvent.create({
+        data: {
+          organizationId: org.id,
+          subscriptionId: sub.id,
+          type: 'UPGRADE',
+          previousMrr: sub.planAmount,
+          newMrr: newPlan.amount,
+          mrrDelta: newPlan.amount - sub.planAmount,
+          previousPlanId: sub.planId,
+          previousPlanNickname: sub.planNickname,
+          newPlanId: newPlan.id,
+          newPlanNickname: newPlan.name,
+          previousQuantity: sub.quantity,
+          newQuantity: sub.quantity,
+          occurredAt: subDays(new Date(), Math.floor(Math.random() * 30) + 1),
+        },
+      });
+      eventCount++;
+    }
+  }
+
+  // Downgrades
+  for (let i = 0; i < 3; i++) {
+    const sub = activeSubscriptions[Math.floor(Math.random() * activeSubscriptions.length)];
+    if (!sub) continue;
+    
+    const currentIndex = plans.findIndex(p => p.id === sub.planId);
+    if (currentIndex > 1) {
+      const newPlan = plans[currentIndex - 1];
+      await prisma.subscriptionEvent.create({
+        data: {
+          organizationId: org.id,
+          subscriptionId: sub.id,
+          type: 'DOWNGRADE',
+          previousMrr: sub.planAmount,
+          newMrr: newPlan.amount,
+          mrrDelta: newPlan.amount - sub.planAmount,
+          previousPlanId: sub.planId,
+          previousPlanNickname: sub.planNickname,
+          newPlanId: newPlan.id,
+          newPlanNickname: newPlan.name,
+          previousQuantity: sub.quantity,
+          newQuantity: sub.quantity,
+          occurredAt: subDays(new Date(), Math.floor(Math.random() * 25) + 1),
+        },
+      });
+      eventCount++;
+    }
+  }
+
+  // Cancellations
+  const canceledSubs = subscriptions.filter(s => s.status === 'canceled' && s.plan.amount > 0);
+  for (const sub of canceledSubs.slice(0, 4)) {
+    await prisma.subscriptionEvent.create({
+      data: {
+        organizationId: org.id,
+        subscriptionId: sub.id,
+        type: 'CANCELED',
+        previousMrr: sub.planAmount,
+        newMrr: 0,
+        mrrDelta: -sub.planAmount,
+        previousPlanId: sub.planId,
+        previousPlanNickname: sub.planNickname,
+        newPlanId: sub.planId,
+        newPlanNickname: sub.planNickname,
+        previousQuantity: sub.quantity,
+        newQuantity: 0,
+        occurredAt: subDays(new Date(), Math.floor(Math.random() * 20) + 1),
       },
+    });
+    eventCount++;
+  }
+
+  console.log(`✓ Created ${eventCount} subscription events`);
+
+  // Daily metrics with growth trajectory
+  const paidSubs = subscriptions.filter(s => s.status === 'active' && s.plan.amount > 0);
+  const baseMrr = paidSubs.reduce((sum, sub) => sum + sub.mrr, 0);
+  const baseCount = paidSubs.length;
+
+  for (let day = 60; day >= 0; day--) {
+    const date = startOfDay(subDays(new Date(), day));
+    const dayOfWeek = getDay(date);
+    const dayIndex = 60 - day;
+    
+    // ~7% monthly growth
+    const growthFactor = Math.pow(1.0023, dayIndex);
+    const mrr = Math.round(baseMrr * growthFactor * 0.72);
+    const noise = mrr * (Math.random() * 0.015 - 0.0075);
+    const weekendDip = (dayOfWeek === 0 || dayOfWeek === 6) ? -mrr * 0.002 : 0;
+    const finalMrr = Math.round(mrr + noise + weekendDip);
+    
+    const activeSubsCount = Math.round(baseCount * growthFactor * 0.78);
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    
+    await prisma.dailyMetrics.upsert({
+      where: { organizationId_date: { organizationId: org.id, date } },
       update: {},
       create: {
         organizationId: org.id,
         date,
-        mrr: baseMrr,
-        arr: baseMrr * 12,
-        arpu: Math.floor(baseMrr / activeSubscriptions),
-        activeSubscriptions,
-        newSubscriptions: Math.floor(Math.random() * 8 + 2),
-        canceledSubscriptions: Math.floor(Math.random() * 4),
-        upgrades: Math.floor(Math.random() * 3),
-        downgrades: Math.floor(Math.random() * 2),
-        grossChurnRate: churnRate,
-        revenueChurnRate: churnRate * 1.2,
-        netRevenueRetention: 100 + (Math.random() * 20 - 5),
-        failedPayments: Math.floor(Math.random() * 5),
-        successfulPayments: Math.floor(Math.random() * 30 + 20),
-        failedPaymentRate: Math.random() * 4 + 1,
-        totalPaymentVolume: Math.floor(baseMrr * 0.9),
-        averageDiscount: 8 + Math.random() * 4,
-        effectivePrice: Math.floor(baseMrr / activeSubscriptions * 0.92),
-        discountLeakage,
+        mrr: finalMrr,
+        arr: finalMrr * 12,
+        arpu: activeSubsCount > 0 ? Math.round(finalMrr / activeSubsCount) : 0,
+        activeSubscriptions: activeSubsCount,
+        newSubscriptions: isWeekend ? Math.floor(Math.random() * 3) + 2 : Math.floor(Math.random() * 5) + 3,
+        canceledSubscriptions: Math.random() < 0.35 ? Math.floor(Math.random() * 2) + 1 : 0,
+        upgrades: Math.random() < 0.45 ? Math.floor(Math.random() * 3) + 1 : 0,
+        downgrades: Math.random() < 0.1 ? 1 : 0,
+        grossChurnRate: 2.2 + Math.random() * 0.5,
+        revenueChurnRate: 1.8 + Math.random() * 0.4,
+        netRevenueRetention: 115 + Math.random() * 12,
+        failedPayments: Math.floor(Math.random() * 3),
+        successfulPayments: isWeekend ? Math.floor(Math.random() * 15) + 8 : Math.floor(Math.random() * 30) + 18,
+        failedPaymentRate: 1.5 + Math.random() * 1,
+        totalPaymentVolume: finalMrr + Math.floor(Math.random() * 150000),
+        averageDiscount: 6 + Math.random() * 4,
+        effectivePrice: activeSubsCount > 0 ? Math.round(finalMrr / activeSubsCount * 0.94) : 0,
+        discountLeakage: Math.round(finalMrr * 0.04),
         planDistribution: {
-          Starter: Math.floor(activeSubscriptions * 0.4),
-          Pro: Math.floor(activeSubscriptions * 0.35),
-          Enterprise: Math.floor(activeSubscriptions * 0.15),
-          'Pro (Annual)': Math.floor(activeSubscriptions * 0.1),
+          Hobby: 0.25 + Math.random() * 0.03 - 0.015,
+          Pro: 0.42 + Math.random() * 0.04 - 0.02,
+          Team: 0.22 + Math.random() * 0.02 - 0.01,
+          Scale: 0.08 + Math.random() * 0.01,
+          Enterprise: 0.03 + Math.random() * 0.005,
         },
       },
     });
   }
 
-  console.log('✓ Created 90 days of mock metrics');
+  console.log('✓ Created 60 days of metrics');
 
-  // Create sample insights
-  const sampleInsights = [
-    {
-      category: 'CHURN' as InsightCategory,
-      severity: 'HIGH' as InsightSeverity,
-      title: 'Starter plan has elevated churn',
-      description: 'Customers on Starter churn 2.4x faster than those on Pro. This suggests the Starter plan may not deliver enough value to retain customers long-term.',
-      confidence: 0.85,
-    },
-    {
-      category: 'PRICING' as InsightCategory,
-      severity: 'MEDIUM' as InsightSeverity,
-      title: 'Significant discount leakage detected',
-      description: "You're losing 11.2% of potential revenue to discounts ($3,920/month). Review your discounting strategy to ensure discounts are driving conversions.",
-      confidence: 0.9,
-    },
-    {
-      category: 'REVENUE' as InsightCategory,
-      severity: 'LOW' as InsightSeverity,
-      title: 'Annual plan adoption is low',
-      description: 'Only 22% of customers are on annual plans. Annual plans typically have higher LTV and lower churn. Consider incentivizing annual upgrades.',
-      confidence: 0.88,
-    },
-    {
-      category: 'PRICING' as InsightCategory,
-      severity: 'MEDIUM' as InsightSeverity,
-      title: 'Heavy discounts correlate with higher churn',
-      description: 'Customers who received >20% discounts churn 1.8x more often than those with smaller or no discounts. Consider qualifying discounts more carefully.',
-      confidence: 0.75,
-    },
+  // AI Insights
+  const insights = [
     {
       category: 'GROWTH' as InsightCategory,
       severity: 'LOW' as InsightSeverity,
-      title: 'Strong MRR growth trajectory',
-      description: 'Your MRR has grown 8.3% over the past 30 days. This positive momentum indicates healthy customer acquisition and retention.',
-      confidence: 0.95,
+      title: 'Strong MRR growth at 7% monthly',
+      description: 'Your MRR is growing at ~7% month-over-month, above the 5% SaaS benchmark. Pro tier drives 42% of paid customers.',
+      confidence: 0.92,
+    },
+    {
+      category: 'CHURN' as InsightCategory,
+      severity: 'HIGH' as InsightSeverity,
+      title: 'Free-to-paid conversion below benchmark',
+      description: 'Only 14% of Hobby users convert to Pro within 30 days. Industry benchmark is 18-22%. Consider adding usage limits or feature gates.',
+      confidence: 0.86,
+    },
+    {
+      category: 'REVENUE' as InsightCategory,
+      severity: 'MEDIUM' as InsightSeverity,
+      title: 'Expansion revenue opportunity',
+      description: 'Your 115% NRR is solid, but 32% of Team customers hit usage limits monthly. Auto-upgrade prompts could capture $6K+ MRR.',
+      confidence: 0.78,
+    },
+    {
+      category: 'PRICING' as InsightCategory,
+      severity: 'MEDIUM' as InsightSeverity,
+      title: 'Pro tier may be underpriced',
+      description: 'Pro customers show 2.1x engagement vs Team but pay 3.75x less. Consider a Pro Plus tier at $45/mo.',
+      confidence: 0.72,
+    },
+    {
+      category: 'EFFICIENCY' as InsightCategory,
+      severity: 'LOW' as InsightSeverity,
+      title: 'Payment failure rate is excellent',
+      description: 'Your 2% payment failure rate is well below the 2.8% industry average. Current dunning setup works well.',
+      confidence: 0.91,
     },
   ];
 
-  for (const insight of sampleInsights) {
+  for (const insight of insights) {
     await prisma.aIInsight.create({
       data: {
         organizationId: org.id,
         ...insight,
-        dataPoints: { source: 'seed' },
+        dataPoints: { source: 'seed', analyzedPeriod: '60 days' },
       },
     });
   }
 
-  console.log(`✓ Created ${sampleInsights.length} sample insights`);
+  console.log(`✓ Created ${insights.length} insights`);
 
-  // Create sample recommendations
-  const insights = await prisma.aIInsight.findMany({
-    where: { organizationId: org.id },
-    take: 3,
-  });
-
-  const sampleRecommendations = [
+  // Recommendations
+  const recommendations = [
     {
-      title: 'Implement proactive churn prevention program',
-      description: 'Deploy automated health scoring for at-risk customers and trigger intervention workflows when risk indicators appear.',
-      reasoning: 'With a 3.2% churn rate, you are losing approximately $1,120/month. A well-executed retention program typically reduces churn by 20-40%.',
+      title: 'Implement usage-based upgrade prompts',
+      description: 'Show upgrade prompts at 80% plan limits. Include real-time usage and one-click upgrade.',
+      reasoning: '32% of Team users hit limits but don\'t upgrade. 15% conversion = $9K ARR.',
       riskLevel: 'LOW' as RiskLevel,
-      estimatedImpact: 403200, // $4,032 over 6 months
-      impactTimeframe: '6 months',
-      impactConfidence: 0.6,
-      priorityScore: 85,
-      insightId: insights[0]?.id,
+      estimatedImpact: 900_00,
+      impactTimeframe: '30 days',
+      impactConfidence: 0.76,
+      priorityScore: 92,
     },
     {
-      title: 'Implement discount governance policy',
-      description: 'Create approval workflows for discounts above 15%, set expiration dates on all discounts, and track which sales reps use discounts most frequently.',
-      reasoning: "You're losing $3,920/month to discounts. Many of these may not be driving conversions that wouldn't happen anyway.",
+      title: 'Launch Pro Plus tier at $45/mo',
+      description: 'Add tier between Pro ($20) and Team ($75) with 3x Pro limits. Target power users.',
+      reasoning: 'Price gap is too large. 20% of Pro users show Team-level usage patterns.',
       riskLevel: 'MEDIUM' as RiskLevel,
-      estimatedImpact: 940800, // $9,408 over 6 months (40% reduction)
-      impactTimeframe: '6 months',
-      impactConfidence: 0.65,
-      priorityScore: 70,
-      insightId: insights[1]?.id,
+      estimatedImpact: 7200_00,
+      impactTimeframe: '60 days',
+      impactConfidence: 0.62,
+      priorityScore: 84,
     },
     {
-      title: 'Launch annual plan upgrade campaign',
-      description: 'Email monthly subscribers offering 2 months free when switching to annual. Highlight the savings and position annual as the "smart choice".',
-      reasoning: 'Only 22% of customers are on annual plans. Annual customers typically have 50-80% lower churn.',
+      title: 'Improve Hobby to Pro conversion',
+      description: '14-day Pro trial for Hobby users after 7 days of activity. Feature comparison emails.',
+      reasoning: 'Current 14% conversion is 30% below benchmark. Each 1% = ~$1.5K MRR.',
       riskLevel: 'LOW' as RiskLevel,
-      estimatedImpact: 252000, // $2,520 impact
-      impactTimeframe: '6 months',
-      impactConfidence: 0.7,
-      priorityScore: 75,
-      insightId: insights[2]?.id,
+      estimatedImpact: 4500_00,
+      impactTimeframe: '45 days',
+      impactConfidence: 0.70,
+      priorityScore: 88,
     },
     {
-      title: 'Review Starter plan value proposition',
-      description: 'Analyze what makes Pro customers stick around and either add those features to Starter or create a migration path for high-value customers.',
-      reasoning: 'Starter customers churn significantly faster, suggesting a value mismatch.',
-      riskLevel: 'MEDIUM' as RiskLevel,
-      estimatedImpact: 175000,
-      impactTimeframe: '6 months',
-      impactConfidence: 0.5,
-      priorityScore: 65,
+      title: 'Enterprise self-serve pricing',
+      description: 'Public Enterprise pricing with volume discounts, ROI calculator, and case studies.',
+      reasoning: 'Enterprise is 3% of customers but 12% of MRR. Lower friction could 2x signups.',
+      riskLevel: 'LOW' as RiskLevel,
+      estimatedImpact: 20000_00,
+      impactTimeframe: '90 days',
+      impactConfidence: 0.52,
+      priorityScore: 72,
     },
   ];
 
-  for (const rec of sampleRecommendations) {
+  for (const rec of recommendations) {
     await prisma.aIRecommendation.create({
       data: {
         organizationId: org.id,
         ...rec,
         baselineMetrics: {
           mrr: baseMrr,
-          churnRate: 3.2,
-          activeSubscriptions: 467,
+          churnRate: 2.4,
+          activeSubscriptions: baseCount,
+          nrr: 115,
         },
       },
     });
   }
 
-  console.log(`✓ Created ${sampleRecommendations.length} sample recommendations`);
+  console.log(`✓ Created ${recommendations.length} recommendations`);
 
   console.log('\n✨ Seeding completed!');
   console.log('\n📋 Demo credentials:');
@@ -313,4 +520,3 @@ async function main() {
 main()
   .catch(console.error)
   .finally(() => prisma.$disconnect());
-

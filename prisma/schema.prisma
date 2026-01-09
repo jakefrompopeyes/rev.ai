@@ -18,16 +18,18 @@ model Organization {
   updatedAt DateTime @updatedAt
 
   // Relations
-  users             User[]
-  stripeConnection  StripeConnection?
-  customers         StripeCustomer[]
-  subscriptions     StripeSubscription[]
-  invoices          StripeInvoice[]
-  payments          StripePayment[]
-  dailyMetrics      DailyMetrics[]
-  insights          AIInsight[]
-  recommendations   AIRecommendation[]
-  syncLogs          SyncLog[]
+  users               User[]
+  stripeConnection    StripeConnection?
+  customers           StripeCustomer[]
+  subscriptions       StripeSubscription[]
+  invoices            StripeInvoice[]
+  payments            StripePayment[]
+  dailyMetrics        DailyMetrics[]
+  insights            AIInsight[]
+  recommendations     AIRecommendation[]
+  syncLogs            SyncLog[]
+  subscriptionEvents  SubscriptionEvent[]
+  pricingExperiments  PricingExperiment[]
 
   @@map("organizations")
 }
@@ -182,9 +184,10 @@ model StripeSubscription {
 
   // Relations
   organizationId String
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customerId     String
-  customer       StripeCustomer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer       StripeCustomer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  events         SubscriptionEvent[]
 
   @@unique([organizationId, stripeId])
   @@index([organizationId, status])
@@ -410,6 +413,172 @@ model AIRecommendation {
   @@index([organizationId, status])
   @@index([organizationId, priorityScore])
   @@map("ai_recommendations")
+}
+
+// ============================================================================
+// SUBSCRIPTION EVENTS (Plan Changes)
+// ============================================================================
+
+enum SubscriptionEventType {
+  UPGRADE
+  DOWNGRADE
+  NEW
+  CANCELED
+  REACTIVATED
+}
+
+model SubscriptionEvent {
+  id                    String                @id @default(cuid())
+  type                  SubscriptionEventType
+  
+  // MRR change tracking
+  previousMrr           Int                   // MRR before the change
+  newMrr                Int                   // MRR after the change
+  mrrDelta              Int                   // Difference (positive = expansion, negative = contraction)
+  
+  // Plan change tracking
+  previousPlanId        String?
+  previousPlanNickname  String?
+  newPlanId             String?
+  newPlanNickname       String?
+  
+  // Quantity change tracking
+  previousQuantity      Int?
+  newQuantity           Int?
+  
+  occurredAt            DateTime              @default(now())
+  
+  // Relations
+  organizationId        String
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptionId        String
+  subscription          StripeSubscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, occurredAt])
+  @@index([organizationId, type])
+  @@map("subscription_events")
+}
+
+// ============================================================================
+// PRICING EXPERIMENTS (A/B Tests)
+// ============================================================================
+
+enum ExperimentStatus {
+  DRAFT
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+model PricingExperiment {
+  id                    String            @id @default(cuid())
+  name                  String
+  hypothesis            String            @db.Text
+  description           String?           @db.Text
+  
+  // Target
+  targetPlanId          String            // The plan being tested
+  targetPlanName        String
+  
+  // Status
+  status                ExperimentStatus  @default(DRAFT)
+  
+  // Timeline
+  startedAt             DateTime?
+  endedAt               DateTime?
+  plannedDuration       Int               // Duration in days
+  
+  // Sample configuration
+  trafficAllocation     Float             @default(50) // % of new signups in experiment
+  minimumSampleSize     Int               // Required sample for significance
+  
+  // Statistical settings
+  confidenceLevel       Float             @default(0.95) // 95% confidence
+  minimumDetectableEffect Float           @default(0.05) // 5% MDE
+  
+  // AI-generated metadata
+  aiGenerated           Boolean           @default(false)
+  expectedLift          Float?            // Predicted lift %
+  priority              Int?              // 1-10
+  risks                 Json?             // Array of risk strings
+  
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  
+  // Relations
+  organizationId        String
+  organization          Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  variants              ExperimentVariant[]
+  assignments           ExperimentAssignment[]
+  
+  @@index([organizationId, status])
+  @@map("pricing_experiments")
+}
+
+model ExperimentVariant {
+  id                    String            @id @default(cuid())
+  name                  String            // "Control", "Variant A", etc.
+  isControl             Boolean           @default(false)
+  
+  // Pricing
+  priceCents            Int               // Price for this variant
+  originalPriceCents    Int?              // Original price if different
+  
+  // Results (updated in real-time)
+  visitors              Int               @default(0) // People who saw this price
+  conversions           Int               @default(0) // People who subscribed
+  churned               Int               @default(0) // People who cancelled
+  totalRevenue          Int               @default(0) // Total revenue in cents
+  
+  // Calculated metrics
+  conversionRate        Float?            // conversions / visitors
+  averageRevenue        Float?            // revenue / conversions
+  churnRate             Float?            // churned / conversions
+  
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  
+  // Relations
+  experimentId          String
+  experiment            PricingExperiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  assignments           ExperimentAssignment[]
+  
+  @@index([experimentId])
+  @@map("experiment_variants")
+}
+
+model ExperimentAssignment {
+  id                    String            @id @default(cuid())
+  
+  // Who was assigned
+  visitorId             String            // Anonymous visitor ID or customer ID
+  customerId            String?           // Stripe customer ID if converted
+  subscriptionId        String?           // Stripe subscription ID if converted
+  
+  // Assignment
+  assignedAt            DateTime          @default(now())
+  
+  // Conversion tracking
+  converted             Boolean           @default(false)
+  convertedAt           DateTime?
+  conversionRevenue     Int?              // Revenue from conversion in cents
+  
+  // Churn tracking
+  churned               Boolean           @default(false)
+  churnedAt             DateTime?
+  lifetimeRevenue       Int?              // Total revenue before churn
+  
+  // Relations
+  experimentId          String
+  experiment            PricingExperiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  variantId             String
+  variant               ExperimentVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  
+  @@unique([experimentId, visitorId])
+  @@index([experimentId, variantId])
+  @@index([customerId])
+  @@map("experiment_assignments")
 }
 
 // ============================================================================

@@ -7,6 +7,7 @@ export async function GET() {
   try {
     const { requireAuthWithOrg } = await import('@/lib/supabase/auth-helpers');
     const { prisma } = await import('@/lib/db');
+    const { isTestMode } = await import('@/lib/stripe/client');
     
     const { organizationId } = await requireAuthWithOrg();
 
@@ -25,15 +26,20 @@ export async function GET() {
       },
     });
 
+    // Check if direct API key connection is supported (test mode only)
+    const supportsDirectConnect = isTestMode();
+
     if (!connection || connection.disconnectedAt) {
       return NextResponse.json({
         connected: false,
         connection: null,
+        supportsDirectConnect,
       });
     }
 
     return NextResponse.json({
       connected: true,
+      supportsDirectConnect,
       connection: {
         accountId: connection.stripeAccountId,
         livemode: connection.livemode,

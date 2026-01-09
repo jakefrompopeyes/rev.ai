@@ -24,6 +24,12 @@ export const STRIPE_OAUTH_CONFIG = {
   scope: 'read_write',
 };
 
+// Check if we're in test/development mode
+export function isTestMode(): boolean {
+  const secretKey = process.env.STRIPE_SECRET_KEY || '';
+  return secretKey.startsWith('sk_test_') || secretKey.startsWith('rk_test_');
+}
+
 // Get the app URL (works on Vercel and locally)
 function getAppUrl(): string {
   const raw =

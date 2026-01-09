@@ -1,14 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CreditCard, 
   RefreshCw, 
   Unplug, 
   Check, 
   AlertCircle,
-  Clock
+  Clock,
+  Key,
+  ChevronDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -31,6 +33,8 @@ interface StripeConnectionProps {
   isSyncing?: boolean;
   onLoadDemo?: () => void;
   isLoadingDemo?: boolean;
+  onDirectConnect?: (apiKey: string) => Promise<void>;
+  supportsDirectConnect?: boolean;
 }
 
 export function StripeConnection({
@@ -43,8 +47,31 @@ export function StripeConnection({
   isSyncing,
   onLoadDemo,
   isLoadingDemo,
+  onDirectConnect,
+  supportsDirectConnect,
 }: StripeConnectionProps) {
   const [showDisconnect, setShowDisconnect] = useState(false);
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [isDirectConnecting, setIsDirectConnecting] = useState(false);
+  const [directConnectError, setDirectConnectError] = useState<string | null>(null);
+
+  const handleDirectConnect = async () => {
+    if (!apiKey.trim() || !onDirectConnect) return;
+    
+    setIsDirectConnecting(true);
+    setDirectConnectError(null);
+    
+    try {
+      await onDirectConnect(apiKey.trim());
+      setApiKey('');
+      setShowApiKeyInput(false);
+    } catch (error) {
+      setDirectConnectError(error instanceof Error ? error.message : 'Connection failed');
+    } finally {
+      setIsDirectConnecting(false);
+    }
+  };
 
   if (!isConnected) {
     return (
@@ -79,6 +106,66 @@ export function StripeConnection({
             </>
           )}
         </Button>
+        
+        {/* Direct API Key Connection (Test Mode Only) */}
+        {supportsDirectConnect && onDirectConnect && (
+          <div className="mt-4">
+            <button
+              onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+            >
+              <Key className="h-3 w-3" />
+              Use API Key instead (Test Mode)
+              <ChevronDown className={`h-3 w-3 transition-transform ${showApiKeyInput ? 'rotate-180' : ''}`} />
+            </button>
+            
+            <AnimatePresence>
+              {showApiKeyInput && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-3 overflow-hidden"
+                >
+                  <div className="max-w-md mx-auto space-y-2">
+                    <input
+                      type="password"
+                      placeholder="sk_test_..."
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono"
+                    />
+                    {directConnectError && (
+                      <p className="text-xs text-red-500">{directConnectError}</p>
+                    )}
+                    <Button
+                      size="sm"
+                      onClick={handleDirectConnect}
+                      disabled={!apiKey.trim() || isDirectConnecting}
+                      className="w-full gap-2"
+                    >
+                      {isDirectConnecting ? (
+                        <>
+                          <Spinner size="sm" />
+                          Connecting...
+                        </>
+                      ) : (
+                        <>
+                          <Key className="h-3 w-3" />
+                          Connect with API Key
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Paste your Stripe test secret key (starts with sk_test_)
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+        
         {onLoadDemo && (
           <Button
             variant="outline"

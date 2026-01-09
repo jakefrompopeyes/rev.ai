@@ -66,6 +66,7 @@ interface MetricsSnapshot {
 
 interface StripeStatus {
   connected: boolean;
+  supportsDirectConnect?: boolean;
   connection?: {
     accountId: string;
     livemode: boolean;
@@ -286,6 +287,12 @@ export default function DashboardPage() {
     try {
       const res = await fetch('/api/stripe/connect');
       const data = await res.json();
+      
+      // Store whether direct connect is supported (for showing API key option)
+      if (data.supportsDirectConnect !== undefined) {
+        setStripeStatus(prev => ({ ...prev, supportsDirectConnect: data.supportsDirectConnect }));
+      }
+      
       if (data.url) {
         window.location.href = data.url;
       }
@@ -294,6 +301,23 @@ export default function DashboardPage() {
     } finally {
       setIsConnecting(false);
     }
+  };
+
+  const handleDirectConnect = async (apiKey: string) => {
+    const res = await fetch('/api/stripe/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey }),
+    });
+    
+    const data = await res.json();
+    
+    if (!res.ok) {
+      throw new Error(data.error || 'Connection failed');
+    }
+    
+    // Refresh stripe status after successful connection
+    await fetchStripeStatus();
   };
 
   const handleDisconnect = async () => {
@@ -559,6 +583,8 @@ export default function DashboardPage() {
             isSyncing={isSyncing}
             onLoadDemo={handleLoadDemo}
             isLoadingDemo={isLoadingDemo}
+            onDirectConnect={handleDirectConnect}
+            supportsDirectConnect={stripeStatus.supportsDirectConnect}
           />
         </section>
 

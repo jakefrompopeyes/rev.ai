@@ -1,9 +1,82 @@
 import Stripe from 'stripe';
 
+// =============================================================================
+// MODE DETECTION & KEY SELECTION
+// =============================================================================
+
+// Get the appropriate secret key based on mode
+// Supports: STRIPE_SECRET_KEY_TEST, STRIPE_SECRET_KEY_LIVE, or single STRIPE_SECRET_KEY
+export function getSecretKey(): string {
+  const mode = process.env.STRIPE_MODE?.toLowerCase();
+  
+  // If explicit mode is set, use the corresponding key
+  if (mode === 'test' || mode === 'development' || mode === 'dev') {
+    return process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY || '';
+  }
+  if (mode === 'live' || mode === 'production' || mode === 'prod') {
+    return process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY || '';
+  }
+  
+  // Default: use STRIPE_SECRET_KEY
+  return process.env.STRIPE_SECRET_KEY || '';
+}
+
+// Check if we're in test/development mode
+// Priority: STRIPE_MODE env var > secret key prefix detection
+export function isTestMode(): boolean {
+  // Explicit mode override
+  const mode = process.env.STRIPE_MODE?.toLowerCase();
+  if (mode === 'test' || mode === 'development' || mode === 'dev') {
+    return true;
+  }
+  if (mode === 'live' || mode === 'production' || mode === 'prod') {
+    return false;
+  }
+  
+  // Fall back to detecting from secret key prefix
+  const secretKey = getSecretKey();
+  return secretKey.startsWith('sk_test_') || secretKey.startsWith('rk_test_');
+}
+
+// Get the appropriate Client ID based on mode
+function getClientId(): string {
+  if (isTestMode()) {
+    return process.env.STRIPE_CLIENT_ID_TEST || process.env.STRIPE_CLIENT_ID || '';
+  }
+  return process.env.STRIPE_CLIENT_ID_LIVE || process.env.STRIPE_CLIENT_ID || '';
+}
+
+// Get the appropriate publishable key based on mode
+export function getPublishableKey(): string {
+  if (isTestMode()) {
+    return process.env.STRIPE_PUBLISHABLE_KEY_TEST || process.env.STRIPE_PUBLISHABLE_KEY || '';
+  }
+  return process.env.STRIPE_PUBLISHABLE_KEY_LIVE || process.env.STRIPE_PUBLISHABLE_KEY || '';
+}
+
+// =============================================================================
+// STRIPE CLIENT
+// =============================================================================
+
+// Lazy-initialized Stripe client to ensure env vars are loaded
+let _stripe: Stripe | null = null;
+
 // Main Stripe client for platform operations
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
-  typescript: true,
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    _stripe = new Stripe(getSecretKey(), {
+      apiVersion: '2023-10-16',
+      typescript: true,
+    });
+  }
+  return _stripe;
+}
+
+// For backwards compatibility - uses lazy getter via Proxy
+export const stripe = new Proxy({} as Stripe, {
+  get(_, prop) {
+    return (getStripe() as unknown as Record<string | symbol, unknown>)[prop];
+  },
 });
 
 // Create a Stripe client for a connected account
@@ -14,22 +87,10 @@ export function createConnectedStripeClient(accessToken: string): Stripe {
   });
 }
 
-// Check if we're in test/development mode
-export function isTestMode(): boolean {
-  const secretKey = process.env.STRIPE_SECRET_KEY || '';
-  return secretKey.startsWith('sk_test_') || secretKey.startsWith('rk_test_');
-}
+// =============================================================================
+// OAUTH CONFIGURATION
+// =============================================================================
 
-// Get the appropriate Client ID based on mode
-function getClientId(): string {
-  if (isTestMode()) {
-    // Use test client ID if available, otherwise fall back to main client ID
-    return process.env.STRIPE_CLIENT_ID_TEST || process.env.STRIPE_CLIENT_ID || '';
-  }
-  return process.env.STRIPE_CLIENT_ID || '';
-}
-
-// OAuth Configuration
 export const STRIPE_OAUTH_CONFIG = {
   get clientId() {
     return getClientId();
@@ -37,7 +98,6 @@ export const STRIPE_OAUTH_CONFIG = {
   authorizeUrl: 'https://connect.stripe.com/oauth/authorize',
   tokenUrl: 'https://connect.stripe.com/oauth/token',
   deauthorizeUrl: 'https://connect.stripe.com/oauth/deauthorize',
-  // Stripe requires read_write scope for Connect Standard (read-only access to data still works)
   scope: 'read_write',
 };
 
@@ -47,7 +107,6 @@ function getAppUrl(): string {
     process.env.APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
-  // Strip any trailing slashes to avoid `//api/stripe/callback`
   return raw.replace(/\/+$/, '');
 }
 
@@ -80,7 +139,7 @@ export async function exchangeCodeForToken(code: string): Promise<{
     body: new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      client_secret: process.env.STRIPE_SECRET_KEY!,
+      client_secret: getSecretKey(),
     }),
   });
 
@@ -110,7 +169,7 @@ export async function deauthorizeStripeAccount(stripeUserId: string): Promise<vo
     body: new URLSearchParams({
       client_id: STRIPE_OAUTH_CONFIG.clientId,
       stripe_user_id: stripeUserId,
-      client_secret: process.env.STRIPE_SECRET_KEY!,
+      client_secret: getSecretKey(),
     }),
   });
 
@@ -133,7 +192,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
     body: new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
-      client_secret: process.env.STRIPE_SECRET_KEY!,
+      client_secret: getSecretKey(),
     }),
   });
 
@@ -149,5 +208,3 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
     refreshToken: data.refresh_token || null,
   };
 }
-
-

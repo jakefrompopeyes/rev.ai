@@ -269,8 +269,11 @@ function extractTitle(text: string): string {
  * - days: number (for forecast horizon, default: 90)
  */
 export async function GET(request: Request) {
+  let organizationId: string | undefined;
+  
   try {
-    const { organizationId } = await requireAuthWithOrg();
+    const auth = await requireAuthWithOrg();
+    organizationId = auth.organizationId;
     
     // Parse query params
     const { searchParams } = new URL(request.url);
@@ -332,7 +335,7 @@ export async function GET(request: Request) {
           summary: null,
         }, { status: 200 }); // Return empty result, not error
       }
-      if (error.message.includes('OPENAI_API_KEY')) {
+      if (error.message.includes('OPENAI_API_KEY') && organizationId) {
         // Fallback to classic mode if OpenAI is not configured
         console.warn('OpenAI not configured, falling back to statistical forecast');
         try {

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AnimatedNumber } from '@/components/ui/animated-number';
+import { AnimatedNumber, AnimatedCurrency } from '@/components/ui/animated-number';
 import { Spinner } from '@/components/ui/spinner';
 import {
   TrendingUp,
@@ -1061,7 +1061,7 @@ export function PricingOptimizer() {
               <div>
                 <p className="text-sm text-zinc-500">Total MRR</p>
                 <p className="text-xl font-bold text-white">
-                  <AnimatedNumber value={analysis.summary.totalMRR / 100} format="currency" />
+                  <AnimatedCurrency cents={analysis.summary.totalMRR} />
                 </p>
               </div>
             </div>

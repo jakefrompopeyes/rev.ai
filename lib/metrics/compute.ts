@@ -428,6 +428,294 @@ export async function getWaterfallData(organizationId: string): Promise<Waterfal
 }
 
 /**
+ * At-risk customer data structure
+ */
+export interface AtRiskCustomer {
+  id: string;
+  email: string;
+  mrr: number;
+  riskReason: 'past_due' | 'usage_drop' | 'downgrade_intent' | 'failed_payment';
+  riskScore: number; // 0-100, higher = more at risk
+  daysSinceIssue: number;
+}
+
+/**
+ * Identify customers who are at risk of churning
+ * Checks for: past due, failed payments, and cancel-at-period-end (downgrade intent)
+ */
+export async function getAtRiskCustomers(
+  organizationId: string,
+  limit: number = 20
+): Promise<AtRiskCustomer[]> {
+  const now = new Date();
+  const thirtyDaysAgo = subDays(now, 30);
+  const atRiskCustomers: AtRiskCustomer[] = [];
+
+  // 1. Get customers with active subscriptions that are set to cancel (downgrade intent)
+  const cancelingSubscriptions = await prisma.stripeSubscription.findMany({
+    where: {
+      organizationId,
+      status: 'active',
+      cancelAtPeriodEnd: true,
+    },
+    include: {
+      customer: {
+        select: {
+          id: true,
+          email: true,
+          stripeId: true,
+        },
+      },
+    },
+  });
+
+  for (const sub of cancelingSubscriptions) {
+    if (!sub.customer) continue;
+    
+    const daysUntilCancel = Math.max(0, Math.floor(
+      (sub.currentPeriodEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)
+    ));
+    
+    // Risk score: higher if cancellation is sooner and MRR is higher
+    const urgencyScore = Math.max(0, 100 - daysUntilCancel * 3); // More urgent if closer
+    const mrrWeight = Math.min(30, sub.mrr / 1000); // Up to 30 points for high MRR
+    const riskScore = Math.min(100, Math.round(urgencyScore * 0.7 + mrrWeight));
+
+    atRiskCustomers.push({
+      id: sub.customer.id,
+      email: sub.customer.email || 'Unknown',
+      mrr: sub.mrr,
+      riskReason: 'downgrade_intent',
+      riskScore,
+      daysSinceIssue: Math.max(0, Math.floor(
+        (now.getTime() - sub.updatedAt.getTime()) / (24 * 60 * 60 * 1000)
+      )),
+    });
+  }
+
+  // 2. Get delinquent customers (past due)
+  const delinquentCustomers = await prisma.stripeCustomer.findMany({
+    where: {
+      organizationId,
+      delinquent: true,
+    },
+    include: {
+      subscriptions: {
+        where: {
+          status: { in: ['active', 'past_due', 'trialing'] },
+        },
+        take: 1,
+      },
+    },
+  });
+
+  for (const customer of delinquentCustomers) {
+    // Skip if already added
+    if (atRiskCustomers.some(c => c.id === customer.id)) continue;
+    
+    const activeSub = customer.subscriptions[0];
+    const mrr = activeSub?.mrr || 0;
+    
+    if (mrr === 0) continue; // Skip if no active revenue
+
+    // Past due is high risk
+    const riskScore = Math.min(100, 70 + Math.min(30, mrr / 1000));
+
+    atRiskCustomers.push({
+      id: customer.id,
+      email: customer.email || 'Unknown',
+      mrr,
+      riskReason: 'past_due',
+      riskScore,
+      daysSinceIssue: Math.floor(
+        (now.getTime() - (activeSub?.updatedAt ?? customer.createdAt).getTime()) / (24 * 60 * 60 * 1000)
+      ),
+    });
+  }
+
+  // 3. Get customers with recent failed payments
+  const failedPayments = await prisma.stripePayment.findMany({
+    where: {
+      organizationId,
+      status: 'failed',
+      stripeCreatedAt: { gte: thirtyDaysAgo },
+    },
+    include: {
+      customer: {
+        include: {
+          subscriptions: {
+            where: {
+              status: { in: ['active', 'past_due', 'trialing'] },
+            },
+            take: 1,
+          },
+        },
+      },
+    },
+    orderBy: { stripeCreatedAt: 'desc' },
+  });
+
+  for (const payment of failedPayments) {
+    if (!payment.customer) continue;
+    // Skip if already added
+    if (atRiskCustomers.some(c => c.id === payment.customer!.id)) continue;
+
+    const activeSub = payment.customer.subscriptions[0];
+    const mrr = activeSub?.mrr || 0;
+    
+    if (mrr === 0) continue; // Skip if no active revenue
+
+    const daysSinceFailure = Math.floor(
+      (now.getTime() - payment.stripeCreatedAt.getTime()) / (24 * 60 * 60 * 1000)
+    );
+
+    // Failed payment risk decreases over time (they may have fixed it)
+    const recencyScore = Math.max(30, 80 - daysSinceFailure * 2);
+    const mrrWeight = Math.min(20, mrr / 1000);
+    const riskScore = Math.min(100, Math.round(recencyScore + mrrWeight));
+
+    atRiskCustomers.push({
+      id: payment.customer.id,
+      email: payment.customer.email || 'Unknown',
+      mrr,
+      riskReason: 'failed_payment',
+      riskScore,
+      daysSinceIssue: daysSinceFailure,
+    });
+  }
+
+  // Sort by risk score (highest first), then by MRR (highest first)
+  atRiskCustomers.sort((a, b) => {
+    if (b.riskScore !== a.riskScore) return b.riskScore - a.riskScore;
+    return b.mrr - a.mrr;
+  });
+
+  return atRiskCustomers.slice(0, limit);
+}
+
+/**
+ * Cohort retention data structure
+ */
+export interface CohortData {
+  cohort: string; // e.g., "Jan 2025"
+  startCount: number;
+  months: (number | undefined)[]; // Retention percentages for each month, undefined if no data yet
+}
+
+/**
+ * Compute cohort retention analysis from subscription data
+ * Groups customers by signup month and tracks retention over time
+ */
+export async function getCohortRetentionData(
+  organizationId: string,
+  monthsBack: number = 12
+): Promise<CohortData[]> {
+  const now = new Date();
+  const cohorts: CohortData[] = [];
+
+  // Get all subscriptions for this organization
+  const subscriptions = await prisma.stripeSubscription.findMany({
+    where: {
+      organizationId,
+      stripeCreatedAt: {
+        gte: subDays(now, monthsBack * 31), // Approximate, we'll filter more precisely
+      },
+    },
+    select: {
+      id: true,
+      stripeCreatedAt: true,
+      status: true,
+      canceledAt: true,
+      endedAt: true,
+    },
+  });
+
+  if (subscriptions.length === 0) {
+    return [];
+  }
+
+  // Group subscriptions by cohort month
+  const cohortMap = new Map<string, typeof subscriptions>();
+
+  for (const sub of subscriptions) {
+    const cohortKey = format(sub.stripeCreatedAt, 'MMM yyyy');
+    if (!cohortMap.has(cohortKey)) {
+      cohortMap.set(cohortKey, []);
+    }
+    cohortMap.get(cohortKey)!.push(sub);
+  }
+
+  // Sort cohorts chronologically
+  const sortedCohortKeys = Array.from(cohortMap.keys()).sort((a, b) => {
+    const dateA = new Date(a);
+    const dateB = new Date(b);
+    return dateA.getTime() - dateB.getTime();
+  });
+
+  // Calculate retention for each cohort
+  for (const cohortKey of sortedCohortKeys) {
+    const cohortSubs = cohortMap.get(cohortKey)!;
+    const startCount = cohortSubs.length;
+
+    if (startCount === 0) continue;
+
+    // Determine the cohort start date (first day of that month)
+    const firstSubDate = cohortSubs[0].stripeCreatedAt;
+    const cohortStartDate = startOfMonth(firstSubDate);
+
+    // Calculate how many months have passed since this cohort started
+    const monthsSinceCohort = Math.floor(
+      (now.getTime() - cohortStartDate.getTime()) / (30.44 * 24 * 60 * 60 * 1000)
+    );
+
+    // Calculate retention for each month (M0 is always 100%)
+    const months: (number | undefined)[] = [];
+
+    for (let m = 0; m <= Math.min(monthsSinceCohort, 11); m++) {
+      // Calculate the end of month M for this cohort
+      const monthEndDate = new Date(cohortStartDate);
+      monthEndDate.setMonth(monthEndDate.getMonth() + m + 1);
+      monthEndDate.setDate(0); // Last day of month M
+
+      // If this month hasn't completed yet, don't show data
+      if (monthEndDate > now && m > 0) {
+        months.push(undefined);
+        continue;
+      }
+
+      // Count how many subscriptions were still active at the end of month M
+      const activeAtMonthEnd = cohortSubs.filter((sub) => {
+        // M0: count all subscriptions that started
+        if (m === 0) return true;
+
+        // For later months: check if subscription was active at end of that month
+        const wasActive =
+          sub.status === 'active' ||
+          sub.status === 'trialing' ||
+          // If canceled/ended, check if it happened after the month we're checking
+          (sub.canceledAt && sub.canceledAt > monthEndDate) ||
+          (sub.endedAt && sub.endedAt > monthEndDate) ||
+          // If no cancellation date, it's still active
+          (!sub.canceledAt && !sub.endedAt);
+
+        return wasActive;
+      }).length;
+
+      const retentionPercent = Math.round((activeAtMonthEnd / startCount) * 100);
+      months.push(retentionPercent);
+    }
+
+    cohorts.push({
+      cohort: cohortKey,
+      startCount,
+      months,
+    });
+  }
+
+  return cohorts;
+}
+
+/**
  * Get current snapshot of all key metrics
  */
 export async function getCurrentMetricsSnapshot(organizationId: string): Promise<{

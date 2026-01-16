@@ -10,7 +10,7 @@ import {
   AlertCircle,
   Clock,
   Key,
-  ChevronDown
+  ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -31,8 +31,6 @@ interface StripeConnectionProps {
   onSync: () => void;
   isConnecting?: boolean;
   isSyncing?: boolean;
-  onLoadDemo?: () => void;
-  isLoadingDemo?: boolean;
   onDirectConnect?: (apiKey: string) => Promise<void>;
   supportsDirectConnect?: boolean;
 }
@@ -45,8 +43,6 @@ export function StripeConnection({
   onSync,
   isConnecting,
   isSyncing,
-  onLoadDemo,
-  isLoadingDemo,
   onDirectConnect,
   supportsDirectConnect,
 }: StripeConnectionProps) {
@@ -166,27 +162,6 @@ export function StripeConnection({
           </div>
         )}
         
-        {onLoadDemo && (
-          <Button
-            variant="outline"
-            size="lg"
-            className="mt-3 gap-2"
-            onClick={onLoadDemo}
-            disabled={isLoadingDemo}
-          >
-            {isLoadingDemo ? (
-              <>
-                <Spinner size="sm" />
-                Loading demo...
-              </>
-            ) : (
-              <>
-                <Clock className="h-4 w-4" />
-                Load Demo Data
-              </>
-            )}
-          </Button>
-        )}
         <p className="mt-4 text-xs text-muted-foreground">
           We only request read-only access. Your data is encrypted and never shared.
         </p>

@@ -8,43 +8,12 @@ import { cn } from '@/lib/utils';
 interface CohortData {
   cohort: string; // e.g., "Jan 2024"
   startCount: number;
-  months: number[]; // Retention percentages for each month [100, 85, 72, ...]
+  months: (number | undefined)[]; // Retention percentages for each month, undefined if no data yet
 }
 
 interface CohortHeatmapProps {
   data: CohortData[];
   isLoading?: boolean;
-}
-
-// Generate mock cohort data for demo
-export function generateMockCohortData(): CohortData[] {
-  const cohorts: CohortData[] = [];
-  const now = new Date();
-  
-  for (let i = 5; i >= 0; i--) {
-    const cohortDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const cohortName = cohortDate.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-    
-    // Generate retention curve with some randomness
-    const months: number[] = [100];
-    let retention = 100;
-    const monthsAvailable = i + 1;
-    
-    for (let m = 1; m < monthsAvailable; m++) {
-      // Natural decay with variance
-      const decay = 0.08 + Math.random() * 0.08; // 8-16% monthly churn
-      retention = Math.max(0, retention * (1 - decay));
-      months.push(Math.round(retention));
-    }
-    
-    cohorts.push({
-      cohort: cohortName,
-      startCount: Math.floor(50 + Math.random() * 100),
-      months,
-    });
-  }
-  
-  return cohorts;
 }
 
 function getRetentionColor(value: number): string {
@@ -71,14 +40,16 @@ export function CohortHeatmap({ data, isLoading }: CohortHeatmapProps) {
   const averageRetention = useMemo(() => {
     if (data.length === 0) return [];
     
-    const avgByMonth: number[] = [];
+    const avgByMonth: (number | undefined)[] = [];
     for (let m = 0; m < maxMonths; m++) {
       const values = data
-        .filter(d => d.months[m] !== undefined)
-        .map(d => d.months[m]);
+        .map(d => d.months[m])
+        .filter((v): v is number => v !== undefined);
       
       if (values.length > 0) {
         avgByMonth.push(Math.round(values.reduce((a, b) => a + b, 0) / values.length));
+      } else {
+        avgByMonth.push(undefined);
       }
     }
     return avgByMonth;
@@ -119,9 +90,9 @@ export function CohortHeatmap({ data, isLoading }: CohortHeatmapProps) {
         <div className="rounded-full bg-muted/50 p-3 w-fit mx-auto">
           <Grid3X3 className="h-6 w-6 text-muted-foreground" />
         </div>
-        <h3 className="mt-4 font-semibold">No cohort data</h3>
+        <h3 className="mt-4 font-semibold">Not enough data available</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Need subscription history to generate cohort analysis.
+          Cohort analysis will appear once there is subscription history.
         </p>
       </motion.div>
     );
@@ -216,9 +187,13 @@ export function CohortHeatmap({ data, isLoading }: CohortHeatmapProps) {
               <td className="py-2 px-1" />
               {averageRetention.map((value, i) => (
                 <td key={i} className="py-2 px-1">
-                  <div className="w-12 h-7 rounded bg-muted/50 flex items-center justify-center font-semibold">
-                    {value}%
-                  </div>
+                  {value !== undefined ? (
+                    <div className="w-12 h-7 rounded bg-muted/50 flex items-center justify-center font-semibold">
+                      {value}%
+                    </div>
+                  ) : (
+                    <div className="w-12 h-7 rounded bg-muted/20" />
+                  )}
                 </td>
               ))}
             </tr>

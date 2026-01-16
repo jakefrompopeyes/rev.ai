@@ -16,7 +16,7 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'REV.AI - Revenue Intelligence Platform',
+  title: 'discovred - Revenue Intelligence Platform',
   description: 'AI-powered revenue intelligence for subscription businesses',
 };
 

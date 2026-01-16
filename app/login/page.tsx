@@ -40,7 +40,7 @@ export default function LoginPage() {
               name,
               company_name: name,
             },
-            emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${redirectTo}`,
+            emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
           },
         });
 
@@ -87,7 +87,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?redirect=${redirectTo}`,
+          redirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
         },
       });
 
@@ -109,7 +109,7 @@ export default function LoginPage() {
             <div className="rounded-xl bg-white/20 p-3 backdrop-blur-sm">
               <Activity className="h-7 w-7" />
             </div>
-            <span className="text-2xl font-bold tracking-tight">REV.AI</span>
+            <span className="text-2xl font-bold tracking-tight">discovred</span>
           </div>
           
           <div className="max-w-md">
@@ -117,9 +117,8 @@ export default function LoginPage() {
               AI-Powered Revenue Intelligence
             </h1>
             <p className="mt-4 text-lg text-white/80 leading-relaxed">
-              Connect your Stripe account and get actionable insights to grow 
-              your subscription business. Reduce churn, optimize pricing, 
-              and maximize revenue.
+              Built for B2B SaaS on Stripe Billing. Connect Stripe and get actionable insights
+              to reduce churn, fix discount leakage, and make safer pricing changes.
             </p>
             
             <div className="mt-8 grid grid-cols-2 gap-4">
@@ -144,7 +143,7 @@ export default function LoginPage() {
           </div>
           
           <div className="text-sm text-white/60">
-            © 2024 REV.AI. Built for subscription businesses.
+            © 2024 discovred. Built for B2B SaaS on Stripe Billing.
           </div>
         </div>
       </div>
@@ -162,7 +161,7 @@ export default function LoginPage() {
             <div className="rounded-xl bg-primary p-3">
               <Activity className="h-6 w-6 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold tracking-tight">REV.AI</span>
+            <span className="text-2xl font-bold tracking-tight">discovred</span>
           </div>
 
           <div className="space-y-2">
@@ -171,7 +170,7 @@ export default function LoginPage() {
             </h2>
             <p className="text-muted-foreground">
               {isSignUp
-                ? 'Start analyzing your revenue data in minutes'
+                ? 'Connect Stripe and get your first insights in minutes'
                 : 'Sign in to access your revenue dashboard'}
             </p>
           </div>

@@ -13,6 +13,10 @@ import {
   BarChart3,
   Lightbulb,
   RefreshCw,
+  DollarSign,
+  Users,
+  Target,
+  TrendingDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
@@ -68,7 +72,7 @@ export default function LandingPage() {
     {
       icon: BarChart3,
       title: 'Pricing Intelligence',
-      description: 'Detect discount leakage, pricing inefficiencies, and optimization opportunities.',
+      description: 'Detect discount leakage, legacy plans, and price-change opportunities before they hurt retention.',
     },
     {
       icon: RefreshCw,
@@ -87,15 +91,18 @@ export default function LandingPage() {
               <div className="rounded-xl bg-primary p-2.5">
                 <Activity className="h-5 w-5 text-primary-foreground" />
               </div>
-              <span className="text-xl font-bold tracking-tight">REV.AI</span>
+              <span className="text-xl font-bold tracking-tight">discovred</span>
             </div>
             <div className="flex items-center gap-4">
+              <Link href="/pricing">
+                <Button variant="ghost" size="sm">Pricing</Button>
+              </Link>
               <Link href="/login">
                 <Button variant="ghost" size="sm">Sign In</Button>
               </Link>
-              <Link href="/login">
+              <Link href="/report">
                 <Button size="sm" className="gap-1.5">
-                  Get Started
+                  Free report
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               </Link>
@@ -123,19 +130,19 @@ export default function LandingPage() {
             </h1>
             
             <p className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Connect your Stripe account and get AI-powered insights to reduce churn, 
-              optimize pricing, and maximize revenue. Built for subscription businesses.
+              Built for B2B SaaS on Stripe Billing. Connect Stripe and get AI-powered insights to reduce churn,
+              find discount leakage, and make safer pricing changes.
             </p>
 
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/login">
+              <Link href="/report">
                 <Button size="lg" className="gap-2 text-base px-8">
-                  Start Free Analysis
+                  Generate free Stripe report
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
               <p className="text-sm text-muted-foreground">
-                No credit card required • Read-only access
+                Best for ~$1M–$15M ARR • No credit card required • Read-only access
               </p>
             </div>
           </motion.div>
@@ -153,25 +160,28 @@ export default function LandingPage() {
               <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
             </div>
             <div className="p-8 space-y-6">
-              {/* Mock metrics */}
-              <div className="grid grid-cols-4 gap-4">
+              {/* Preview metrics */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-left">
                 {[
-                  { label: 'MRR', value: '$47,250', change: '+12.4%' },
-                  { label: 'Active', value: '1,247', change: '+8.2%' },
-                  { label: 'ARPU', value: '$38', change: '+4.1%' },
-                  { label: 'Churn', value: '2.3%', change: '-0.8%' },
+                  { icon: DollarSign, label: 'MRR', value: '$47,250', change: '+12.4%', positive: true },
+                  { icon: Users, label: 'Active', value: '1,247', change: '+8.2%', positive: true },
+                  { icon: Target, label: 'ARPU', value: '$38', change: '+4.1%', positive: true },
+                  { icon: TrendingDown, label: 'Churn', value: '2.3%', change: '-0.8%', positive: true },
                 ].map((metric, i) => (
                   <motion.div
                     key={metric.label}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5 + i * 0.1 }}
-                    className="rounded-lg border border-border bg-background p-4 text-left"
+                    className="rounded-xl border border-border bg-card p-5"
                   >
-                    <div className="text-xs text-muted-foreground">{metric.label}</div>
-                    <div className="text-xl font-bold mt-1">{metric.value}</div>
-                    <div className={`text-xs mt-1 ${
-                      metric.change.startsWith('+') ? 'text-emerald-600' : 'text-amber-600'
+                    <div className="rounded-lg bg-primary/10 p-3 w-fit">
+                      <metric.icon className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="mt-4 text-xs text-muted-foreground uppercase tracking-wide">{metric.label}</div>
+                    <div className="text-2xl font-bold mt-1">{metric.value}</div>
+                    <div className={`text-sm font-medium mt-1 ${
+                      metric.positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
                     }`}>
                       {metric.change}
                     </div>
@@ -179,7 +189,7 @@ export default function LandingPage() {
                 ))}
               </div>
 
-              {/* Mock insight */}
+              {/* Preview insight */}
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -210,10 +220,10 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold tracking-tight">
-              Everything you need to grow revenue
+                  Everything you need to improve pricing + retention
             </h2>
             <p className="mt-3 text-muted-foreground">
-              Connect once, get insights forever. No manual data entry required.
+                  Connect once, get answers fast. No manual data entry required.
             </p>
           </div>
 
@@ -252,14 +262,14 @@ export default function LandingPage() {
           <div className="relative z-10">
             <h2 className="text-3xl font-bold">Ready to unlock revenue insights?</h2>
             <p className="mt-4 text-white/80 max-w-lg mx-auto">
-              Join subscription businesses using AI to make smarter pricing and retention decisions.
+              Join B2B SaaS teams using AI to make smarter pricing and retention decisions.
             </p>
-            <Link href="/login">
+            <Link href="/report">
               <Button
                 size="lg"
                 className="mt-8 bg-white text-primary hover:bg-white/90 gap-2"
               >
-                Get Started Free
+                Generate free report
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
@@ -272,9 +282,9 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
-            <span>REV.AI</span>
+            <span>discovred</span>
           </div>
-          <div>© 2024 REV.AI. Built for subscription businesses.</div>
+          <div>© 2024 discovred. Built for B2B SaaS on Stripe Billing.</div>
         </div>
       </footer>
     </div>

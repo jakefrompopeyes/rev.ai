@@ -58,6 +58,7 @@ export async function POST(request: Request) {
     }
 
     const organizationId = connection.organizationId;
+    let metricsShouldRefresh = false;
 
     switch (event.type) {
       // Customer events
@@ -73,9 +74,11 @@ export async function POST(request: Request) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
         await handleSubscriptionUpdate(event.data.object as Stripe.Subscription, organizationId);
+        metricsShouldRefresh = true;
         break;
       case 'customer.subscription.deleted':
         await handleSubscriptionDeleted(event.data.object as Stripe.Subscription, organizationId);
+        metricsShouldRefresh = true;
         break;
 
       // Invoice events
@@ -84,17 +87,32 @@ export async function POST(request: Request) {
       case 'invoice.paid':
       case 'invoice.payment_failed':
         await handleInvoiceUpdate(event.data.object as Stripe.Invoice, organizationId);
+        metricsShouldRefresh = true;
         break;
 
       // Payment events
       case 'charge.succeeded':
       case 'charge.failed':
       case 'charge.refunded':
-        await handleChargeUpdate(event.data.object as Stripe.Charge, organizationId);
+        await handleChargeUpdate(
+          event.data.object as Stripe.Charge,
+          organizationId,
+          stripeAccountId || undefined
+        );
+        metricsShouldRefresh = true;
         break;
 
       default:
         console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    if (metricsShouldRefresh) {
+      try {
+        const { computeDailyMetrics } = await import('@/lib/metrics/compute');
+        await computeDailyMetrics(organizationId);
+      } catch (err) {
+        console.error('Error recomputing metrics after webhook:', err);
+      }
     }
 
     // Update last sync time
@@ -146,14 +164,11 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription, organ
   const price = item?.price;
   const planAmount = price?.unit_amount || 0;
   const interval = price?.recurring?.interval || 'month';
+  const intervalCount = price?.recurring?.interval_count || 1;
+  const quantity = item?.quantity || 1;
 
   // Calculate MRR
-  let mrr = planAmount;
-  if (interval === 'year') {
-    mrr = Math.round(planAmount / 12);
-  } else if (interval === 'week') {
-    mrr = Math.round(planAmount * 4.33);
-  }
+  const { mrr } = calculateMrrArr(planAmount, interval, intervalCount, quantity);
 
   // Get db customer id
   const stripeCustomerId = typeof subscription.customer === 'string' 
@@ -169,7 +184,13 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription, organ
     return;
   }
 
-  await prisma.stripeSubscription.upsert({
+  const existingSubscription = await prisma.stripeSubscription.findUnique({
+    where: {
+      organizationId_stripeId: { organizationId, stripeId: subscription.id },
+    },
+  });
+
+  const upsertedSubscription = await prisma.stripeSubscription.upsert({
     where: {
       organizationId_stripeId: { organizationId, stripeId: subscription.id },
     },
@@ -190,8 +211,8 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription, organ
       planAmount,
       planCurrency: price?.currency || 'usd',
       planInterval: interval,
-      planIntervalCount: price?.recurring?.interval_count || 1,
-      quantity: item?.quantity || 1,
+      planIntervalCount: intervalCount,
+      quantity,
       mrr,
       arr: mrr * 12,
       organizationId,
@@ -213,26 +234,9 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription, organ
     },
   });
 
-  // Record subscription event
-  const eventType = subscription.status === 'canceled' ? 'CANCELED' 
-    : subscription.status === 'active' && !subscription.trial_end ? 'CONVERTED'
-    : 'UPGRADED';
-
-  await prisma.subscriptionEvent.create({
-    data: {
-      organizationId,
-      subscriptionId: subscription.id,
-      eventType,
-      previousMrr: 0,
-      newMrr: mrr,
-      mrrDelta: mrr,
-    },
-  });
+  await recordSubscriptionEvent(organizationId, upsertedSubscription, existingSubscription);
 
   console.log(`✅ Subscription ${subscription.id} synced (MRR: $${(mrr / 100).toFixed(2)})`);
-
-  // Update daily metrics
-  await updateDailyMetrics(organizationId);
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription, organizationId: string) {
@@ -244,8 +248,6 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription, orga
     },
   });
   console.log(`🗑️ Subscription ${subscription.id} marked as canceled`);
-  
-  await updateDailyMetrics(organizationId);
 }
 
 async function handleInvoiceUpdate(invoice: Stripe.Invoice, organizationId: string) {
@@ -266,6 +268,11 @@ async function handleInvoiceUpdate(invoice: Stripe.Invoice, organizationId: stri
     ? invoice.subscription 
     : invoice.subscription?.id;
 
+  const tax = invoice.tax || 0;
+  const subtotal = invoice.subtotal || 0;
+  const total = invoice.total || 0;
+  const discountAmount = Math.max(0, subtotal - total + tax);
+
   await prisma.stripeInvoice.upsert({
     where: {
       organizationId_stripeId: { organizationId, stripeId: invoice.id },
@@ -283,7 +290,7 @@ async function handleInvoiceUpdate(invoice: Stripe.Invoice, organizationId: stri
       total: invoice.total || 0,
       tax: invoice.tax || null,
       currency: invoice.currency || 'usd',
-      discountAmount: 0,
+      discountAmount,
       billingReason: invoice.billing_reason,
       stripeCreatedAt: new Date(invoice.created * 1000),
       periodStart: invoice.period_start ? new Date(invoice.period_start * 1000) : new Date(),
@@ -301,12 +308,17 @@ async function handleInvoiceUpdate(invoice: Stripe.Invoice, organizationId: stri
       paidAt: invoice.status === 'paid' && invoice.status_transitions?.paid_at
         ? new Date(invoice.status_transitions.paid_at * 1000)
         : null,
+      discountAmount,
     },
   });
   console.log(`✅ Invoice ${invoice.id} synced`);
 }
 
-async function handleChargeUpdate(charge: Stripe.Charge, organizationId: string) {
+async function handleChargeUpdate(
+  charge: Stripe.Charge,
+  organizationId: string,
+  stripeAccountId?: string
+) {
   const stripeCustomerId = typeof charge.customer === 'string' 
     ? charge.customer 
     : charge.customer?.id;
@@ -322,6 +334,8 @@ async function handleChargeUpdate(charge: Stripe.Charge, organizationId: string)
     return;
   }
 
+  const { fee, net } = await getFeeAndNet(charge, stripeAccountId);
+
   await prisma.stripePayment.upsert({
     where: {
       organizationId_stripeId: { organizationId, stripeId: charge.id },
@@ -334,8 +348,8 @@ async function handleChargeUpdate(charge: Stripe.Charge, organizationId: string)
       amountRefunded: charge.amount_refunded,
       currency: charge.currency,
       status: charge.status,
-      fee: 0,
-      net: charge.amount,
+      fee,
+      net,
       paymentMethodType: charge.payment_method_details?.type,
       failureCode: charge.failure_code,
       failureMessage: charge.failure_message,
@@ -345,11 +359,179 @@ async function handleChargeUpdate(charge: Stripe.Charge, organizationId: string)
     update: {
       status: charge.status,
       amountRefunded: charge.amount_refunded,
+      fee,
+      net,
       failureCode: charge.failure_code,
       failureMessage: charge.failure_message,
     },
   });
   console.log(`✅ Payment ${charge.id} synced (${charge.status})`);
+}
+
+async function recordSubscriptionEvent(
+  organizationId: string,
+  current: {
+    id: string;
+    mrr: number;
+    planId: string | null;
+    planNickname: string | null;
+    quantity: number;
+    status: string;
+    canceledAt: Date | null;
+  },
+  existing: {
+    id: string;
+    mrr: number;
+    planId: string | null;
+    planNickname: string | null;
+    quantity: number;
+    status: string;
+    canceledAt: Date | null;
+  } | null
+) {
+  if (!existing) {
+    await prisma.subscriptionEvent.create({
+      data: {
+        organizationId,
+        subscriptionId: current.id,
+        type: 'NEW',
+        previousMrr: 0,
+        newMrr: current.mrr,
+        mrrDelta: current.mrr,
+        previousPlanId: null,
+        previousPlanNickname: null,
+        newPlanId: current.planId,
+        newPlanNickname: current.planNickname,
+        previousQuantity: null,
+        newQuantity: current.quantity,
+      },
+    });
+    return;
+  }
+
+  // Cancellation
+  if (!existing.canceledAt && current.canceledAt) {
+    await prisma.subscriptionEvent.create({
+      data: {
+        organizationId,
+        subscriptionId: current.id,
+        type: 'CANCELED',
+        previousMrr: existing.mrr,
+        newMrr: 0,
+        mrrDelta: -existing.mrr,
+        previousPlanId: existing.planId,
+        previousPlanNickname: existing.planNickname,
+        newPlanId: current.planId,
+        newPlanNickname: current.planNickname,
+        previousQuantity: existing.quantity,
+        newQuantity: current.quantity,
+      },
+    });
+    return;
+  }
+
+  // Reactivation
+  if (existing.canceledAt && !current.canceledAt && current.status === 'active') {
+    await prisma.subscriptionEvent.create({
+      data: {
+        organizationId,
+        subscriptionId: current.id,
+        type: 'REACTIVATED',
+        previousMrr: 0,
+        newMrr: current.mrr,
+        mrrDelta: current.mrr,
+        previousPlanId: existing.planId,
+        previousPlanNickname: existing.planNickname,
+        newPlanId: current.planId,
+        newPlanNickname: current.planNickname,
+        previousQuantity: existing.quantity,
+        newQuantity: current.quantity,
+      },
+    });
+    return;
+  }
+
+  // MRR change detection (upgrade or downgrade)
+  const mrrDelta = current.mrr - existing.mrr;
+
+  // Only track if there's a meaningful change (> $1 to avoid rounding issues)
+  if (Math.abs(mrrDelta) > 100) {
+    const changeType = mrrDelta > 0 ? 'UPGRADE' : 'DOWNGRADE';
+
+    await prisma.subscriptionEvent.create({
+      data: {
+        organizationId,
+        subscriptionId: current.id,
+        type: changeType,
+        previousMrr: existing.mrr,
+        newMrr: current.mrr,
+        mrrDelta,
+        previousPlanId: existing.planId,
+        previousPlanNickname: existing.planNickname,
+        newPlanId: current.planId,
+        newPlanNickname: current.planNickname,
+        previousQuantity: existing.quantity,
+        newQuantity: current.quantity,
+      },
+    });
+  }
+}
+
+async function getFeeAndNet(charge: Stripe.Charge, stripeAccountId?: string) {
+  if (charge.balance_transaction && typeof charge.balance_transaction === 'object') {
+    const fee = (charge.balance_transaction as Stripe.BalanceTransaction).fee ?? 0;
+    const net = (charge.balance_transaction as Stripe.BalanceTransaction).net ?? charge.amount;
+    return { fee, net };
+  }
+
+  if (typeof charge.balance_transaction === 'string') {
+    try {
+      const balanceTx = await stripe.balanceTransactions.retrieve(
+        charge.balance_transaction,
+        stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+      );
+      return {
+        fee: balanceTx.fee ?? 0,
+        net: balanceTx.net ?? charge.amount,
+      };
+    } catch (err) {
+      console.error('Failed to retrieve balance transaction for charge', charge.id, err);
+    }
+  }
+
+  return { fee: 0, net: charge.amount };
+}
+
+function calculateMrrArr(
+  amount: number,
+  interval: string,
+  intervalCount: number,
+  quantity: number
+) {
+  const totalAmount = amount * quantity;
+  let mrr: number;
+
+  switch (interval) {
+    case 'day':
+      mrr = Math.round((totalAmount * 30) / intervalCount);
+      break;
+    case 'week':
+      mrr = Math.round((totalAmount * 4.33) / intervalCount);
+      break;
+    case 'month':
+      mrr = Math.round(totalAmount / intervalCount);
+      break;
+    case 'year':
+      mrr = Math.round(totalAmount / (12 * intervalCount));
+      break;
+    default:
+      mrr = totalAmount;
+  }
+
+  return {
+    mrr,
+    arr: mrr * 12,
+  };
 }
 
 async function updateDailyMetrics(organizationId: string) {

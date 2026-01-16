@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import crypto from 'crypto';
 import { prisma } from '@/lib/db';
 import { createConnectedStripeClient } from './client';
 
@@ -608,10 +609,14 @@ function calculateMrrArr(
  * Hash email for privacy (simple hash, not cryptographically secure)
  */
 function hashEmail(email: string): string {
-  // For MVP, we'll just store a truncated/anonymized version
-  const [localPart, domain] = email.split('@');
-  if (!localPart || !domain) return '***@***';
-  const truncatedLocal = localPart.slice(0, 2) + '***';
-  return `${truncatedLocal}@${domain}`;
+  const secret = process.env.PII_HASH_SECRET;
+  if (!secret) {
+    console.warn('PII_HASH_SECRET not set; falling back to anonymized email hash');
+  }
+
+  const normalized = email.trim().toLowerCase();
+  const hmac = crypto.createHmac('sha256', secret || 'discovred-fallback-secret');
+  hmac.update(normalized);
+  return hmac.digest('hex');
 }
 

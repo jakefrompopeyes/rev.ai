@@ -1,12 +1,21 @@
-# REV.AI - AI-Powered Revenue Intelligence Platform
+# discovred - AI-Powered Revenue Intelligence Platform
 
 > Transform your Stripe data into actionable revenue insights. Built for subscription businesses.
 
-![REV.AI Dashboard](https://via.placeholder.com/800x400?text=REV.AI+Dashboard)
+![discovred Dashboard](https://via.placeholder.com/800x400?text=discovred+Dashboard)
+
+## 🎯 Target Customer (ICP)
+
+discovred is designed first for:
+
+- **Company type**: B2B SaaS
+- **Billing stack**: Stripe Billing (subscriptions)
+- **Size**: ~**$1M–$15M ARR**
+- **Primary jobs-to-be-done**: make better pricing + retention decisions (discounts, plan complexity, churn risk)
 
 ## 🎯 Overview
 
-REV.AI connects to your Stripe account via secure OAuth (read-only) and provides:
+discovred connects to your Stripe account via secure OAuth (read-only) and provides:
 
 - **Live Revenue Metrics** - MRR, ARR, ARPU, churn, and more
 - **AI-Generated Insights** - Plain English explanations of trends and anomalies
@@ -49,7 +58,7 @@ REV.AI connects to your Stripe account via secure OAuth (read-only) and provides
 
 1. **Clone and install dependencies**
    ```bash
-   cd REV.AI
+   cd discovred
    npm install
    ```
 
@@ -72,7 +81,6 @@ REV.AI connects to your Stripe account via secure OAuth (read-only) and provides
    ```bash
    npm run db:generate
    npm run db:push
-   npm run db:seed  # Optional: adds demo data
    ```
 
 4. **Start development server**
@@ -81,12 +89,6 @@ REV.AI connects to your Stripe account via secure OAuth (read-only) and provides
    ```
 
 5. **Open http://localhost:3000**
-
-### Demo Credentials
-```
-Email: demo@revai.com
-Password: demo123
-```
 
 ## 🏗 Architecture
 
@@ -123,7 +125,7 @@ Password: demo123
 ## 📁 Project Structure
 
 ```
-REV.AI/
+discovred/
 ├── app/                    # Next.js App Router
 │   ├── api/               # API routes
 │   │   ├── auth/          # NextAuth endpoints
@@ -144,8 +146,7 @@ REV.AI/
 │   ├── auth.ts           # NextAuth configuration
 │   └── db.ts             # Prisma client
 ├── prisma/               # Database
-│   ├── schema.prisma     # Database schema
-│   └── seed.ts           # Seed data
+│   └── schema.prisma     # Database schema
 └── scripts/              # Cron jobs
     └── sync-stripe.ts    # Daily sync script
 ```
@@ -180,7 +181,7 @@ curl -X POST http://localhost:3000/api/stripe/sync
 Set up a daily cron job:
 ```bash
 # Run at 2 AM daily
-0 2 * * * cd /path/to/REV.AI && npm run sync:stripe
+0 2 * * * cd /path/to/discovred && npm run sync:stripe
 ```
 
 ## 🤖 AI Insights

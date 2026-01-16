@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   DollarSign,
   Users,
@@ -13,6 +13,8 @@ import {
   AlertTriangle,
   CreditCard,
   Activity as ActivityIcon,
+  X,
+  Target,
 } from 'lucide-react';
 import { MetricCard } from '@/components/dashboard/metric-card';
 import { InsightsFeed } from '@/components/dashboard/insights-feed';
@@ -22,18 +24,20 @@ import { RevenueTrendChart } from '@/components/dashboard/revenue-trend-chart';
 import { RevenueWaterfall } from '@/components/dashboard/revenue-waterfall';
 import { PlanDistribution } from '@/components/dashboard/plan-distribution';
 import { DateRangePicker, getDaysFromRange, type DateRange } from '@/components/dashboard/date-range-picker';
-import { ActivityTimeline, generateActivitiesFromMetrics, type Activity } from '@/components/dashboard/activity-timeline';
-import { CustomerHealth, generateMockAtRiskCustomers } from '@/components/dashboard/customer-health';
+import { ActivityTimeline, type Activity } from '@/components/dashboard/activity-timeline';
+import { CustomerHealth } from '@/components/dashboard/customer-health';
 import { QuickStats, generateQuickStats } from '@/components/dashboard/quick-stats';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { RevenueForecast } from '@/components/dashboard/revenue-forecast';
-import { GoalTracker } from '@/components/dashboard/goal-tracker';
-import { CohortHeatmap, generateMockCohortData } from '@/components/dashboard/cohort-heatmap';
+import { CohortHeatmap } from '@/components/dashboard/cohort-heatmap';
 import { ExportButton } from '@/components/dashboard/export-button';
 import { PricingOptimizer } from '@/components/dashboard/pricing-optimizer';
 import { PricingCopilotChat } from '@/components/dashboard/pricing-copilot-chat';
-import { ABTestTracker } from '@/components/dashboard/ab-test-tracker';
-import { NotificationCenter, generateSampleNotifications, type Notification } from '@/components/dashboard/notification-center';
+import { NotificationCenter, type Notification } from '@/components/dashboard/notification-center';
+import { DiscountLeakage } from '@/components/dashboard/discount-leakage';
+import { PriceIncreaseSafety } from '@/components/dashboard/price-increase-safety';
+import { LegacyPlanDetector } from '@/components/dashboard/legacy-plan-detector';
+import { AnnualPlanOpportunity } from '@/components/dashboard/annual-plan-opportunity';
 import { ComparisonToggle } from '@/components/dashboard/comparison-toggle';
 import { KeyboardShortcutsHelp } from '@/components/dashboard/keyboard-shortcuts-help';
 import { SettingsPanel } from '@/components/dashboard/settings-panel';
@@ -41,6 +45,7 @@ import { useKeyboardShortcuts } from '@/lib/hooks/use-keyboard-shortcuts';
 import { formatCurrency, formatPercentAbs } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface Metrics {
   mrr: number;
@@ -107,6 +112,21 @@ interface MetricHistoryPoint {
   activeSubscriptions?: number;
 }
 
+interface CohortData {
+  cohort: string;
+  startCount: number;
+  months: (number | undefined)[];
+}
+
+interface AtRiskCustomer {
+  id: string;
+  email: string;
+  mrr: number;
+  riskReason: 'past_due' | 'usage_drop' | 'downgrade_intent' | 'failed_payment';
+  riskScore: number;
+  daysSinceIssue: number;
+}
+
 interface WaterfallData {
   startingMrr: number;
   newBusiness: number;
@@ -130,21 +150,32 @@ export default function DashboardPage() {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   
+  const [activities, setActivities] = useState<Activity[]>([]);
+  
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isLoadingDemo, setIsLoadingDemo] = useState(false);
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(true);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isLoadingWaterfall, setIsLoadingWaterfall] = useState(true);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(true);
   const [isLoadingInsights, setIsLoadingInsights] = useState(true);
   const [isLoadingRecs, setIsLoadingRecs] = useState(true);
+  const [cohortData, setCohortData] = useState<CohortData[]>([]);
+  const [isLoadingCohorts, setIsLoadingCohorts] = useState(true);
+  const [atRiskCustomers, setAtRiskCustomers] = useState<AtRiskCustomer[]>([]);
+  const [isLoadingAtRisk, setIsLoadingAtRisk] = useState(true);
   
   // New state for enhanced features
   const [dateRange, setDateRange] = useState<DateRange>('30d');
   const [comparisonEnabled, setComparisonEnabled] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(generateSampleNotifications());
-  const [mrrGoal, setMrrGoal] = useState<number>(0);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'revenue' | 'customers' | 'pricing' | 'ai'>('overview');
+
+  // Free report onboarding (lightweight, client-only)
+  const flow = searchParams.get('flow');
+  const [showFreeReportOnboarding, setShowFreeReportOnboarding] = useState(false);
+  const [freeReportStep, setFreeReportStep] = useState<'connect' | 'goal'>('connect');
 
   // Check auth status
   useEffect(() => {
@@ -162,6 +193,17 @@ export default function DashboardPage() {
 
     return () => subscription.unsubscribe();
   }, [supabase.auth]);
+
+  // Optional deep link: /dashboard?tab=pricing (etc.)
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (!tab) return;
+    const allowed = ['overview', 'revenue', 'customers', 'pricing', 'ai'] as const;
+    if (allowed.includes(tab as any)) {
+      setActiveTab(tab as (typeof allowed)[number]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Define fetch functions first (before useEffects that depend on them)
   const fetchStripeStatus = useCallback(async () => {
@@ -250,6 +292,51 @@ export default function DashboardPage() {
     }
   }, []);
 
+  const fetchActivities = useCallback(async () => {
+    try {
+      setIsLoadingActivities(true);
+      const res = await fetch('/api/metrics?view=activities&limit=20');
+      if (res.ok) {
+        const data = await res.json();
+        setActivities(data.activities || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch activities:', error);
+    } finally {
+      setIsLoadingActivities(false);
+    }
+  }, []);
+
+  const fetchCohortData = useCallback(async () => {
+    try {
+      setIsLoadingCohorts(true);
+      const res = await fetch('/api/metrics?view=cohorts&months=12');
+      if (res.ok) {
+        const data = await res.json();
+        setCohortData(data.cohorts || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch cohort data:', error);
+    } finally {
+      setIsLoadingCohorts(false);
+    }
+  }, []);
+
+  const fetchAtRiskCustomers = useCallback(async () => {
+    try {
+      setIsLoadingAtRisk(true);
+      const res = await fetch('/api/metrics?view=at-risk&limit=20');
+      if (res.ok) {
+        const data = await res.json();
+        setAtRiskCustomers(data.atRiskCustomers || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch at-risk customers:', error);
+    } finally {
+      setIsLoadingAtRisk(false);
+    }
+  }, []);
+
   // Check for connection callback
   useEffect(() => {
     const connected = searchParams.get('connected');
@@ -258,15 +345,38 @@ export default function DashboardPage() {
     if (connected === 'true') {
       // Refresh status and trigger sync
       fetchStripeStatus();
-      // Clear the URL param
-      router.replace('/dashboard');
+      // Clear the URL param but preserve other query params (e.g. flow=free-report)
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('connected');
+      params.delete('error');
+      const qs = params.toString();
+      router.replace(qs ? `/dashboard?${qs}` : '/dashboard');
     }
     
     if (error) {
       console.error('Stripe connection error:', error);
-      router.replace('/dashboard');
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('connected');
+      params.delete('error');
+      const qs = params.toString();
+      router.replace(qs ? `/dashboard?${qs}` : '/dashboard');
     }
   }, [searchParams, router, fetchStripeStatus]);
+
+  // Trigger free report onboarding flow when arriving via /dashboard?flow=free-report
+  useEffect(() => {
+    if (!user?.id) return;
+    if (flow !== 'free-report') return;
+    const key = `discovred:onboarding:free-report:${user.id}`;
+    const completed = localStorage.getItem(key) === '1';
+    if (!completed) setShowFreeReportOnboarding(true);
+  }, [flow, user?.id]);
+
+  // Keep onboarding step in sync with Stripe connection
+  useEffect(() => {
+    if (!showFreeReportOnboarding) return;
+    setFreeReportStep(stripeStatus.connected ? 'goal' : 'connect');
+  }, [showFreeReportOnboarding, stripeStatus.connected]);
 
   // Fetch data on mount when authenticated (or in dev mode)
   useEffect(() => {
@@ -276,10 +386,13 @@ export default function DashboardPage() {
       fetchMetrics();
       fetchMetricsHistory();
       fetchWaterfallData();
+      fetchActivities();
+      fetchCohortData();
+      fetchAtRiskCustomers();
       fetchInsights();
       fetchRecommendations();
     }
-  }, [user, fetchStripeStatus, fetchMetrics, fetchMetricsHistory, fetchWaterfallData, fetchInsights, fetchRecommendations]);
+  }, [user, fetchStripeStatus, fetchMetrics, fetchMetricsHistory, fetchWaterfallData, fetchActivities, fetchCohortData, fetchAtRiskCustomers, fetchInsights, fetchRecommendations]);
 
   // Actions
   const handleConnect = async () => {
@@ -343,6 +456,9 @@ export default function DashboardPage() {
           fetchMetrics(),
           fetchMetricsHistory(),
           fetchWaterfallData(),
+          fetchActivities(),
+          fetchCohortData(),
+          fetchAtRiskCustomers(),
           fetchInsights(),
           fetchRecommendations(),
         ]);
@@ -351,27 +467,6 @@ export default function DashboardPage() {
       console.error('Sync failed:', error);
     } finally {
       setIsSyncing(false);
-    }
-  };
-
-  const handleLoadDemo = async () => {
-    setIsLoadingDemo(true);
-    try {
-      const res = await fetch('/api/demo/seed', { method: 'POST' });
-      if (res.ok) {
-        await Promise.all([
-          fetchStripeStatus(),
-          fetchMetrics(),
-          fetchMetricsHistory(),
-          fetchWaterfallData(),
-          fetchInsights(),
-          fetchRecommendations(),
-        ]);
-      }
-    } catch (error) {
-      console.error('Demo seed failed:', error);
-    } finally {
-      setIsLoadingDemo(false);
     }
   };
 
@@ -430,37 +525,63 @@ export default function DashboardPage() {
     fetchMetricsHistory(getDaysFromRange(range));
   };
 
+  const dismissFreeReportFlow = () => {
+    setShowFreeReportOnboarding(false);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('flow');
+    const qs = params.toString();
+    router.replace(qs ? `/dashboard?${qs}` : '/dashboard');
+  };
+
+  const completeFreeReportFlow = (goal: 'pricing' | 'retention' | 'growth') => {
+    if (user?.id) {
+      const key = `discovred:onboarding:free-report:${user.id}`;
+      localStorage.setItem(key, '1');
+    }
+
+    // Put them on the most valuable view immediately
+    setActiveTab('overview');
+    setShowFreeReportOnboarding(false);
+
+    // Clean URL
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('flow');
+    const qs = params.toString();
+    router.replace(qs ? `/dashboard?${qs}` : '/dashboard');
+
+    // Scroll to the hero pricing section
+    window.setTimeout(() => {
+      const el = document.getElementById('pricing-intelligence');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+
+    // Keep goal around for future personalization (client-only for now)
+    try {
+      if (user?.id) {
+        localStorage.setItem(`discovred:goal:${user.id}`, goal);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   // Extract current metrics for use in computed values
   const current = metrics?.current;
   const changes = metrics?.changes || {};
 
-  // Compute derived data for new components
-  const activities: Activity[] = current
-    ? generateActivitiesFromMetrics({
-        newSubscriptions: current.newSubscriptions,
-        canceledSubscriptions: current.canceledSubscriptions,
-        upgrades: current.upgrades,
-        downgrades: current.downgrades,
-      })
-    : [];
-
   const quickStats = current
     ? generateQuickStats({
-        arpu: current.arpu,
+        arr: current.arr,
         netRevenueRetention: current.netRevenueRetention,
-        grossChurnRate: current.grossChurnRate,
+        failedPaymentRate: current.failedPaymentRate,
         averageDiscount: current.averageDiscount,
       })
     : [];
 
-  // Only use mock data when Stripe is not connected
-  const atRiskCustomers = stripeStatus.connected ? [] : generateMockAtRiskCustomers();
   const healthScore = current
     ? Math.max(0, Math.min(100, 100 - (current.grossChurnRate || 0) * 10 - (current.failedPaymentRate || 0) * 5))
     : 80;
 
-  // Only use mock cohort data when Stripe is not connected
-  const cohortData = stripeStatus.connected ? [] : generateMockCohortData();
 
   // Export data compilation
   const exportData = {
@@ -523,13 +644,13 @@ export default function DashboardPage() {
                 <ActivityIcon className="h-5 w-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight">REV.AI</h1>
+                <h1 className="text-xl font-bold tracking-tight">discovred</h1>
                 <p className="text-xs text-muted-foreground">Revenue Intelligence</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <KeyboardShortcutsHelp shortcuts={shortcuts} />
-              <ExportButton data={exportData} filename="revai-dashboard" />
+              <ExportButton data={exportData} filename="discovred-dashboard" />
               <NotificationCenter
                 notifications={notifications}
                 onMarkAsRead={handleMarkNotificationRead}
@@ -555,26 +676,133 @@ export default function DashboardPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* Free report onboarding overlay */}
+        <AnimatePresence>
+          {showFreeReportOnboarding && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] bg-background/70 backdrop-blur-sm"
+            >
+              <div className="absolute inset-0" onClick={dismissFreeReportFlow} />
+              <motion.div
+                initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                transition={{ duration: 0.18 }}
+                className="relative z-[61] mx-auto mt-24 w-[min(720px,calc(100%-2rem))] rounded-2xl border border-border bg-card shadow-2xl"
+              >
+                <div className="flex items-start justify-between gap-4 p-6 border-b border-border">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-xl bg-primary/10 p-3 mt-0.5">
+                      <Target className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Free Stripe Pricing Opportunity Report</div>
+                      <h2 className="text-xl font-bold tracking-tight mt-1">Let’s generate your first “wow” insight</h2>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        {freeReportStep === 'connect'
+                          ? 'Step 1 of 2: Connect Stripe (read-only) to generate your report.'
+                          : 'Step 2 of 2: Pick your goal, then we’ll jump you to the best report.'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={dismissFreeReportFlow}
+                    className="h-9 w-9 rounded-lg border border-border bg-background hover:bg-muted/50 transition-colors flex items-center justify-center"
+                    title="Close"
+                  >
+                    <X className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </div>
+
+                <div className="p-6">
+                  {freeReportStep === 'connect' ? (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-border bg-muted/30 p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="rounded-lg bg-primary/10 p-2 mt-0.5">
+                            <CreditCard className="h-4 w-4 text-primary" />
+                          </div>
+                          <div>
+                            <div className="font-semibold">Connect Stripe (read-only)</div>
+                            <div className="text-sm text-muted-foreground mt-1">
+                              We’ll use your subscription + invoice data to surface discount leakage and safer pricing moves.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="ghost" onClick={dismissFreeReportFlow}>
+                          Not now
+                        </Button>
+                        <Button className="gap-2" onClick={handleConnect} disabled={isConnecting}>
+                          {isConnecting ? (
+                            <>
+                              <Spinner size="sm" />
+                              Connecting…
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="h-4 w-4" />
+                              Connect Stripe
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <button
+                          onClick={() => completeFreeReportFlow('pricing')}
+                          className="rounded-xl border border-border bg-background p-4 text-left hover:bg-muted/40 transition-colors"
+                        >
+                          <div className="font-semibold">Discover pricing</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Discount leakage, plan risk, safer price moves.
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => completeFreeReportFlow('retention')}
+                          className="rounded-xl border border-border bg-background p-4 text-left hover:bg-muted/40 transition-colors"
+                        >
+                          <div className="font-semibold">Reduce churn</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Find churn drivers and at-risk segments.
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => completeFreeReportFlow('growth')}
+                          className="rounded-xl border border-border bg-background p-4 text-left hover:bg-muted/40 transition-colors"
+                        >
+                          <div className="font-semibold">Increase expansion</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Upgrade paths and annual plan candidates.
+                          </div>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          Tip: you can export/share results after starting a plan trial.
+                        </p>
+                        <Button variant="ghost" onClick={dismissFreeReportFlow}>
+                          Skip
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Stripe Connection */}
         <section className="mb-8">
-          <div className="flex items-center justify-end mb-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={handleLoadDemo}
-              disabled={isLoadingDemo}
-            >
-              {isLoadingDemo ? (
-                <>
-                  <Spinner size="sm" />
-                  Seeding demo...
-                </>
-              ) : (
-                <>Load Demo Data</>
-              )}
-            </Button>
-          </div>
           <StripeConnection
             isConnected={stripeStatus.connected}
             connection={stripeStatus.connection}
@@ -583,8 +811,6 @@ export default function DashboardPage() {
             onSync={handleSync}
             isConnecting={isConnecting}
             isSyncing={isSyncing}
-            onLoadDemo={handleLoadDemo}
-            isLoadingDemo={isLoadingDemo}
             onDirectConnect={handleDirectConnect}
             supportsDirectConnect={stripeStatus.supportsDirectConnect}
           />
@@ -592,208 +818,203 @@ export default function DashboardPage() {
 
         {stripeStatus.connected && (
           <>
-            {/* Quick Stats Strip */}
-            <section className="mb-6">
-              <QuickStats stats={quickStats} isLoading={isLoadingMetrics} />
-            </section>
-
-            {/* Section A: Live Revenue Snapshot */}
             <section className="mb-10">
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-emerald-500 pulse-dot" />
-                  <h2 className="text-lg font-semibold">Live Revenue Snapshot</h2>
-                </div>
-                <div className="flex items-center gap-2">
-                  <ComparisonToggle
-                    enabled={comparisonEnabled}
-                    onChange={setComparisonEnabled}
-                  />
-                  <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <MetricCard
-                  title="Monthly Recurring Revenue"
-                  value={current ? formatCurrency(current.mrr) : '$0'}
-                  change={changes.mrr}
-                  icon={DollarSign}
-                  trend={changes.mrr > 0 ? 'up' : changes.mrr < 0 ? 'down' : 'neutral'}
-                  delay={0}
-                />
-                <MetricCard
-                  title="Active Subscriptions"
-                  value={current?.activeSubscriptions?.toLocaleString() || '0'}
-                  change={changes.activeSubscriptions}
-                  icon={Users}
-                  trend={changes.activeSubscriptions > 0 ? 'up' : changes.activeSubscriptions < 0 ? 'down' : 'neutral'}
-                  delay={0.1}
-                />
-                <MetricCard
-                  title="Average Revenue Per User"
-                  value={current ? formatCurrency(current.arpu) : '$0'}
-                  change={changes.arpu}
-                  icon={TrendingUp}
-                  trend={changes.arpu > 0 ? 'up' : changes.arpu < 0 ? 'down' : 'neutral'}
-                  delay={0.2}
-                />
-                <MetricCard
-                  title="Monthly Churn Rate"
-                  value={current ? formatPercentAbs(current.grossChurnRate) : '0%'}
-                  change={changes.grossChurnRate}
-                  changeLabel="vs last month"
-                  icon={Percent}
-                  trend={changes.grossChurnRate < 0 ? 'up' : changes.grossChurnRate > 0 ? 'down' : 'neutral'}
-                  delay={0.3}
-                />
-              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="w-full">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <TabsList className="w-full sm:w-auto">
+                      <TabsTrigger value="overview">Overview</TabsTrigger>
+                      <TabsTrigger value="revenue">Revenue</TabsTrigger>
+                      <TabsTrigger value="customers">Customers</TabsTrigger>
+                      <TabsTrigger value="pricing">Pricing</TabsTrigger>
+                      <TabsTrigger value="ai">AI</TabsTrigger>
+                    </TabsList>
 
-              {/* Secondary metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="rounded-xl border border-border bg-card p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Annual Revenue</span>
-                    <CreditCard className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex items-center gap-2">
+                      <div className="hidden md:block">
+                        <ComparisonToggle enabled={comparisonEnabled} onChange={setComparisonEnabled} />
+                      </div>
+                      <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
+                    </div>
                   </div>
-                  <p className="text-2xl font-bold mt-1">
-                    {current ? formatCurrency(current.arr) : '$0'}
-                  </p>
-                </motion.div>
-                
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.45 }}
-                  className="rounded-xl border border-border bg-card p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Net Revenue Retention</span>
-                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <p className="text-2xl font-bold mt-1">
-                    {current ? formatPercentAbs(current.netRevenueRetention) : '0%'}
-                  </p>
-                </motion.div>
-                
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                  className="rounded-xl border border-border bg-card p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Failed Payment Rate</span>
-                    <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <p className="text-2xl font-bold mt-1">
-                    {current ? formatPercentAbs(current.failedPaymentRate) : '0%'}
-                  </p>
-                </motion.div>
+
+                  <TabsContent value="overview" className="space-y-6">
+                    <QuickStats stats={quickStats} isLoading={isLoadingMetrics} />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <MetricCard
+                        title="Monthly Recurring Revenue"
+                        value={current ? formatCurrency(current.mrr) : '$0'}
+                        change={changes.mrr}
+                        icon={DollarSign}
+                        trend={changes.mrr > 0 ? 'up' : changes.mrr < 0 ? 'down' : 'neutral'}
+                        delay={0}
+                      />
+                      <MetricCard
+                        title="Active Subscriptions"
+                        value={current?.activeSubscriptions?.toLocaleString() || '0'}
+                        change={changes.activeSubscriptions}
+                        icon={Users}
+                        trend={changes.activeSubscriptions > 0 ? 'up' : changes.activeSubscriptions < 0 ? 'down' : 'neutral'}
+                        delay={0.1}
+                      />
+                      <MetricCard
+                        title="Average Revenue Per User"
+                        value={current ? formatCurrency(current.arpu) : '$0'}
+                        change={changes.arpu}
+                        icon={TrendingUp}
+                        trend={changes.arpu > 0 ? 'up' : changes.arpu < 0 ? 'down' : 'neutral'}
+                        delay={0.2}
+                      />
+                      <MetricCard
+                        title="Monthly Churn Rate"
+                        value={current ? formatPercentAbs(current.grossChurnRate) : '0%'}
+                        change={changes.grossChurnRate}
+                        changeLabel="vs last month"
+                        icon={Percent}
+                        trend={changes.grossChurnRate < 0 ? 'up' : changes.grossChurnRate > 0 ? 'down' : 'neutral'}
+                        delay={0.3}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      <section>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-semibold">AI Insights</h2>
+                            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                              {insights.length} active
+                            </span>
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => setActiveTab('ai')}>
+                            View all
+                          </Button>
+                        </div>
+                        <InsightsFeed
+                          insights={insights.slice(0, 3)}
+                          onDismiss={handleDismissInsight}
+                          isLoading={isLoadingInsights}
+                        />
+                      </section>
+
+                      <section>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-semibold">Recommendations</h2>
+                            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                              {recommendations.filter(r => r.status === 'PENDING').length} pending
+                            </span>
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => setActiveTab('ai')}>
+                            View all
+                          </Button>
+                        </div>
+                        <RecommendationsPanel
+                          recommendations={recommendations.filter(r => r.status === 'PENDING').slice(0, 3)}
+                          onImplement={handleImplementRecommendation}
+                          onDismiss={handleDismissRecommendation}
+                          isLoading={isLoadingRecs}
+                        />
+                      </section>
+                    </div>
+
+                    <section className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-semibold">Pricing Intelligence</h2>
+                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                          AI-powered
+                        </span>
+                      </div>
+
+                      <div id="pricing-intelligence" className="grid grid-cols-1 lg:grid-cols-2 gap-6 scroll-mt-24">
+                        <DiscountLeakage variant="hero" />
+                        <PriceIncreaseSafety variant="hero" />
+                        <LegacyPlanDetector variant="hero" />
+                        <AnnualPlanOpportunity variant="hero" />
+                      </div>
+                    </section>
+                  </TabsContent>
+
+                  <TabsContent value="revenue" className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <RevenueTrendChart data={metricsHistory} isLoading={isLoadingHistory} />
+                      <RevenueWaterfall data={waterfallData} isLoading={isLoadingWaterfall} />
+                    </div>
+                    <RevenueForecast />
+                  </TabsContent>
+
+                  <TabsContent value="customers" className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <CustomerHealth
+                        atRiskCustomers={atRiskCustomers}
+                        healthScore={Math.round(healthScore)}
+                        churnRate={current?.grossChurnRate || 0}
+                        failedPaymentRate={current?.failedPaymentRate || 0}
+                        isLoading={isLoadingMetrics || isLoadingAtRisk}
+                      />
+                      <div className="lg:col-span-2">
+                        <ActivityTimeline
+                          activities={activities}
+                          isLoading={isLoadingActivities}
+                          maxItems={12}
+                        />
+                      </div>
+                    </div>
+                    <CohortHeatmap data={cohortData} isLoading={isLoadingCohorts} />
+                  </TabsContent>
+
+                  <TabsContent value="pricing" className="space-y-10">
+                    <section>
+                      <PricingOptimizer />
+                    </section>
+
+                    <section>
+                      <div className="flex items-center gap-2 mb-5">
+                        <h2 className="text-lg font-semibold">Plan Mix</h2>
+                      </div>
+                      <PlanDistribution
+                        data={current?.planDistribution || null}
+                        totalMrr={current?.mrr}
+                        isLoading={isLoadingMetrics}
+                      />
+                    </section>
+                  </TabsContent>
+
+                  <TabsContent value="ai" className="space-y-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      <section>
+                        <div className="flex items-center gap-2 mb-5">
+                          <h2 className="text-lg font-semibold">AI Insights</h2>
+                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                            {insights.length} active
+                          </span>
+                        </div>
+                        <InsightsFeed
+                          insights={insights}
+                          onDismiss={handleDismissInsight}
+                          isLoading={isLoadingInsights}
+                        />
+                      </section>
+
+                      <section>
+                        <div className="flex items-center gap-2 mb-5">
+                          <h2 className="text-lg font-semibold">Recommendations</h2>
+                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                            {recommendations.filter(r => r.status === 'PENDING').length} pending
+                          </span>
+                        </div>
+                        <RecommendationsPanel
+                          recommendations={recommendations}
+                          onImplement={handleImplementRecommendation}
+                          onDismiss={handleDismissRecommendation}
+                          isLoading={isLoadingRecs}
+                        />
+                      </section>
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </div>
             </section>
-
-            {/* Section: Revenue Charts */}
-            <section className="mb-10">
-              <div className="flex items-center gap-2 mb-5">
-                <h2 className="text-lg font-semibold">Revenue Analytics</h2>
-              </div>
-              
-              {/* First row: Trend Chart and Waterfall */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <RevenueTrendChart data={metricsHistory} isLoading={isLoadingHistory} />
-                <RevenueWaterfall data={waterfallData} isLoading={isLoadingWaterfall} />
-              </div>
-              
-              {/* Second row: Forecast and Goal Tracker */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-                <RevenueForecast />
-                <GoalTracker
-                  currentMrr={current?.mrr || 0}
-                  targetMrr={mrrGoal}
-                  onTargetChange={setMrrGoal}
-                  isLoading={isLoadingMetrics}
-                />
-              </div>
-              
-              {/* Third row: Plan Distribution, Customer Health, Activity */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-                <PlanDistribution
-                  data={current?.planDistribution || null}
-                  totalMrr={current?.mrr}
-                  isLoading={isLoadingMetrics}
-                />
-                <CustomerHealth
-                  atRiskCustomers={atRiskCustomers}
-                  healthScore={Math.round(healthScore)}
-                  churnRate={current?.grossChurnRate || 0}
-                  failedPaymentRate={current?.failedPaymentRate || 0}
-                  isLoading={isLoadingMetrics}
-                />
-                <ActivityTimeline
-                  activities={activities}
-                  isLoading={isLoadingMetrics}
-                  maxItems={6}
-                />
-              </div>
-
-              {/* Fourth row: Cohort Retention Heatmap */}
-              <div className="mt-6">
-                <CohortHeatmap
-                  data={cohortData}
-                  isLoading={isLoadingMetrics}
-                />
-              </div>
-            </section>
-
-            {/* Section: AI Pricing Optimizer */}
-            <section className="mb-10">
-              <PricingOptimizer />
-            </section>
-
-            {/* Section: A/B Test Tracker */}
-            <section className="mb-10">
-              <ABTestTracker />
-            </section>
-
-            {/* Sections B & C: Insights and Recommendations */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Section B: AI Insights Feed */}
-              <section>
-                <div className="flex items-center gap-2 mb-5">
-                  <h2 className="text-lg font-semibold">AI Insights</h2>
-                  <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                    {insights.length} active
-                  </span>
-                </div>
-                <InsightsFeed
-                  insights={insights}
-                  onDismiss={handleDismissInsight}
-                  isLoading={isLoadingInsights}
-                />
-              </section>
-
-              {/* Section C: AI Recommendations */}
-              <section>
-                <div className="flex items-center gap-2 mb-5">
-                  <h2 className="text-lg font-semibold">Recommendations</h2>
-                  <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                    {recommendations.filter(r => r.status === 'PENDING').length} pending
-                  </span>
-                </div>
-                <RecommendationsPanel
-                  recommendations={recommendations}
-                  onImplement={handleImplementRecommendation}
-                  onDismiss={handleDismissRecommendation}
-                  isLoading={isLoadingRecs}
-                />
-              </section>
-            </div>
           </>
         )}
       </main>

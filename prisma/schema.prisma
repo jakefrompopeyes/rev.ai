@@ -17,9 +17,16 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Billing / entitlements (discovred subscription, not the customer's Stripe data)
+  isComped     Boolean         @default(false)
+  compedTier   EntitlementTier?
+  compedUntil  DateTime?
+  compedReason String?
+
   // Relations
   users               User[]
   stripeConnection    StripeConnection?
+  billingSubscription BillingSubscription?
   customers           StripeCustomer[]
   subscriptions       StripeSubscription[]
   invoices            StripeInvoice[]
@@ -32,6 +39,13 @@ model Organization {
   pricingExperiments  PricingExperiment[]
 
   @@map("organizations")
+}
+
+enum EntitlementTier {
+  STARTER
+  GROWTH
+  SCALE
+  ENTERPRISE
 }
 
 model User {
@@ -51,6 +65,42 @@ model User {
   sessions       Session[]
 
   @@map("users")
+}
+
+// ============================================================================
+// discovred BILLING (Your app's own subscription)
+// ============================================================================
+
+model BillingSubscription {
+  id String @id @default(cuid())
+
+  // Relations
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Stripe identifiers (for discovred billing subscriptions)
+  stripeSubscriptionId String @unique // sub_xxx
+  stripeCustomerId     String? // cus_xxx
+
+  // Status & period (mirrors Stripe)
+  status             String
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean   @default(false)
+  canceledAt         DateTime?
+  endedAt            DateTime?
+  trialStart         DateTime?
+  trialEnd           DateTime?
+
+  // What they bought (stored from subscription metadata)
+  tierKey   String? // "growth" | "scale" etc
+  interval  String? // "monthly" | "annually"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@map("billing_subscriptions")
 }
 
 model Account {

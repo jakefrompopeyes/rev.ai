@@ -972,7 +972,7 @@ export function PricingOptimizer() {
   };
 
   const handleSimulate = async (planId: string) => {
-    // For demo, simulate a 10% price increase
+    // Simulate a 10% price increase
     const plan = analysis?.planPerformance.find(p => p.planId === planId);
     if (!plan) return;
 

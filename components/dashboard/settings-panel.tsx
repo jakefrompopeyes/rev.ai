@@ -223,7 +223,7 @@ export function SettingsPanel({ isOpen, onClose, user, onSignOut }: SettingsPane
                       <div>
                         <h3 className="text-lg font-semibold mb-1">Appearance</h3>
                         <p className="text-sm text-muted-foreground mb-4">
-                          Customize how REV.AI looks on your device.
+                          Customize how discovred looks on your device.
                         </p>
                         
                         {/* Theme selection */}

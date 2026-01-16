@@ -121,7 +121,7 @@ export async function askPricingCopilot(
   // Build context from current data
   const dataContext = buildDataContext(analysis);
 
-  const systemPrompt = `You are an expert SaaS pricing strategist and analyst for a revenue intelligence platform called REV.AI. You help companies optimize their subscription pricing to maximize revenue while maintaining healthy customer relationships.
+  const systemPrompt = `You are an expert SaaS pricing strategist and analyst for a revenue intelligence platform called discovred. You help companies optimize their subscription pricing to maximize revenue while maintaining healthy customer relationships.
 
 You have access to the following real-time pricing data for this company:
 

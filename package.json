@@ -13,7 +13,6 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts",
     "sync:stripe": "tsx scripts/sync-stripe.ts",
     "compute:metrics": "tsx scripts/compute-metrics.ts",
     "generate:insights": "tsx scripts/generate-insights.ts"

@@ -2,9 +2,33 @@ import { createClient, getUser } from './server';
 import { prisma } from '@/lib/db';
 
 /**
- * Development mode fallback org ID
+ * Development mode organization ID - uses first org in database or creates one
  */
-const DEV_DEMO_ORG_ID = 'demo-org-001';
+async function getDevOrganizationId(): Promise<string> {
+  // Try to find an existing organization
+  const existingOrg = await prisma.organization.findFirst({
+    select: { id: true },
+  });
+  
+  if (existingOrg) {
+    return existingOrg.id;
+  }
+  
+  // Create a new organization for development
+  const newOrg = await prisma.organization.create({
+    data: {
+      name: 'Development Organization',
+      users: {
+        create: {
+          email: 'dev@localhost',
+          name: 'Developer',
+        },
+      },
+    },
+  });
+  
+  return newOrg.id;
+}
 
 /**
  * Get the organization ID for the current authenticated user
@@ -27,7 +51,7 @@ export async function getOrganizationId(): Promise<string | null> {
 
 /**
  * Require authentication and return organization ID
- * In development mode, falls back to demo org if not authenticated
+ * In development mode, falls back to dev org if not authenticated
  */
 export async function requireAuthWithOrg(): Promise<{
   userId: string;
@@ -37,12 +61,13 @@ export async function requireAuthWithOrg(): Promise<{
   const user = await getUser();
   
   if (!user?.email) {
-    // Development fallback: use demo org
+    // Development fallback
     if (process.env.NODE_ENV !== 'production') {
+      const devOrgId = await getDevOrganizationId();
       return {
-        userId: 'demo-user',
-        email: 'demo@revai.com',
-        organizationId: DEV_DEMO_ORG_ID,
+        userId: 'dev-user',
+        email: 'dev@localhost',
+        organizationId: devOrgId,
       };
     }
     throw new Error('Unauthorized');

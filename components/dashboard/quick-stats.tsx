@@ -9,6 +9,8 @@ import {
   Clock,
   ArrowUp,
   ArrowDown,
+  CreditCard,
+  DollarSign,
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 
@@ -136,18 +138,18 @@ export function QuickStats({ stats = defaultStats, isLoading }: QuickStatsProps)
 
 // Generate stats from metrics
 export function generateQuickStats(metrics: {
-  arpu?: number;
+  arr?: number;
   netRevenueRetention?: number;
-  grossChurnRate?: number;
+  failedPaymentRate?: number;
   averageDiscount?: number;
 }): QuickStat[] {
   return [
     {
-      id: 'arpu',
-      label: 'ARPU',
-      value: metrics.arpu ? formatCurrency(metrics.arpu) : '$0',
+      id: 'arr',
+      label: 'ARR',
+      value: metrics.arr ? formatCurrency(metrics.arr) : '$0',
       trend: 'neutral',
-      icon: Target,
+      icon: DollarSign,
       color: 'text-violet-600 dark:text-violet-400',
     },
     {
@@ -161,13 +163,13 @@ export function generateQuickStats(metrics: {
       color: 'text-emerald-600 dark:text-emerald-400',
     },
     {
-      id: 'churn',
-      label: 'Churn Rate',
-      value: metrics.grossChurnRate
-        ? `${metrics.grossChurnRate.toFixed(1)}%`
+      id: 'failed_payments',
+      label: 'Failed Payments',
+      value: metrics.failedPaymentRate
+        ? `${metrics.failedPaymentRate.toFixed(1)}%`
         : '0%',
-      trend: (metrics.grossChurnRate ?? 0) <= 3 ? 'up' : 'down',
-      icon: Shield,
+      trend: (metrics.failedPaymentRate ?? 0) <= 1.5 ? 'up' : 'down',
+      icon: CreditCard,
       color: 'text-blue-600 dark:text-blue-400',
     },
     {

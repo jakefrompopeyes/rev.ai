@@ -111,7 +111,7 @@ export function PricingCopilotChat() {
           <Bot className="w-5 h-5" />
           <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
         </div>
-        <span className="font-medium">Ask Pricing AI</span>
+        <span className="font-medium">Ask Gertrude</span>
         <Sparkles className="w-4 h-4 opacity-75 group-hover:opacity-100 transition-opacity" />
       </button>
     );
@@ -130,8 +130,8 @@ export function PricingCopilotChat() {
               <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-zinc-900" />
             </div>
             <div>
-              <span className="text-white">Pricing Copilot</span>
-              <p className="text-xs text-zinc-500 font-normal">AI-powered pricing insights</p>
+              <span className="text-white">Gertrude</span>
+              <p className="text-xs text-zinc-500 font-normal">Your AI pricing advisor</p>
             </div>
           </CardTitle>
           <div className="flex items-center gap-1">
@@ -164,10 +164,10 @@ export function PricingCopilotChat() {
               <Sparkles className="w-8 h-8 text-purple-400" />
             </div>
             <h3 className="text-lg font-semibold text-white mb-2">
-              Ask me anything about pricing
+              Hi, I&apos;m Gertrude 👋
             </h3>
             <p className="text-sm text-zinc-400 mb-6">
-              I can analyze your pricing data, suggest optimizations, and design experiments.
+              Ask me anything about pricing — I&apos;ll analyze your data, suggest optimizations, and design experiments.
             </p>
             <div className="grid grid-cols-2 gap-2 w-full">
               {STARTER_QUESTIONS.slice(0, 4).map((q, i) => (
@@ -238,7 +238,7 @@ export function PricingCopilotChat() {
                 <div className="bg-zinc-800 rounded-2xl rounded-bl-md px-4 py-3">
                   <div className="flex items-center gap-2 text-zinc-400">
                     <Spinner className="w-4 h-4" />
-                    <span className="text-sm">Analyzing your pricing data...</span>
+                    <span className="text-sm">Gertrude is thinking...</span>
                   </div>
                 </div>
               </div>
@@ -268,7 +268,7 @@ export function PricingCopilotChat() {
           </Button>
         </form>
         <p className="text-xs text-zinc-600 text-center mt-2">
-          Powered by GPT-4 · Your data stays private
+          Gertrude is powered by GPT-4 · Your data stays private
         </p>
       </div>
     </Card>

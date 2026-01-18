@@ -322,7 +322,7 @@ export function DiscountLeakage({ variant = 'full' }: { variant?: DiscountLeakag
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={fetchData}
+              onClick={() => fetchData(strictMode)}
               className="mt-2 border-zinc-700"
             >
               <RefreshCw className="h-4 w-4 mr-2" />

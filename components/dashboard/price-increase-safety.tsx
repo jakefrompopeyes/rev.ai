@@ -481,7 +481,7 @@ export function PriceIncreaseSafety({ variant = 'full' }: { variant?: PriceIncre
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={fetchData}
+              onClick={() => fetchData()}
               className="mt-2 border-zinc-700"
             >
               <RefreshCw className="h-4 w-4 mr-2" />

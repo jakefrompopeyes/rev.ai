@@ -243,30 +243,37 @@ export async function analyzeLegacyPlans(
   }
 
   // Determine current market prices per plan
-  // Strategy: Use the highest price among recent subscriptions (last 6 months)
-  // This captures the "current" price for each plan
+  // Strategy: Prefer the most recent price per plan to avoid overstating "current"
+  // prices when there have been price decreases. Fall back to max price if needed.
   const recentThreshold = subMonths(now, 6);
-  const currentPrices = new Map<string, number>();
+  const mostRecentPrice = new Map<string, { price: number; startDate: Date }>();
+  const maxPriceByPlan = new Map<string, number>();
   
   for (const sub of subscriptions) {
     if (!sub.planId) continue;
     
-    // For recent subscriptions, track the price as potential "current" price
+    const maxExisting = maxPriceByPlan.get(sub.planId) || 0;
+    if (sub.planAmount > maxExisting) {
+      maxPriceByPlan.set(sub.planId, sub.planAmount);
+    }
+    
     if (sub.startDate >= recentThreshold) {
-      const existing = currentPrices.get(sub.planId) || 0;
-      if (sub.planAmount > existing) {
-        currentPrices.set(sub.planId, sub.planAmount);
+      const existing = mostRecentPrice.get(sub.planId);
+      if (!existing || sub.startDate > existing.startDate) {
+        mostRecentPrice.set(sub.planId, { price: sub.planAmount, startDate: sub.startDate });
       }
     }
   }
-
+  
+  const currentPrices = new Map<string, number>();
+  for (const [planId, info] of mostRecentPrice.entries()) {
+    currentPrices.set(planId, info.price);
+  }
+  
   // If no recent subs, use the max price for each plan
-  for (const sub of subscriptions) {
-    if (!sub.planId) continue;
-    if (!currentPrices.has(sub.planId)) {
-      const samePlanSubs = subscriptions.filter(s => s.planId === sub.planId);
-      const maxPrice = Math.max(...samePlanSubs.map(s => s.planAmount));
-      currentPrices.set(sub.planId, maxPrice);
+  for (const [planId, maxPrice] of maxPriceByPlan.entries()) {
+    if (!currentPrices.has(planId)) {
+      currentPrices.set(planId, maxPrice);
     }
   }
 

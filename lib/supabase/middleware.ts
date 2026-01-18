@@ -60,7 +60,7 @@ export async function updateSession(request: NextRequest) {
   // Protected routes - redirect to login if not authenticated
   // In development mode, allow access without authentication
   const isDev = process.env.NODE_ENV === 'development';
-  const protectedPaths = ['/dashboard'];
+  const protectedPaths = ['/dashboard', '/report'];
   const isProtectedPath = protectedPaths.some(path => 
     request.nextUrl.pathname.startsWith(path)
   );

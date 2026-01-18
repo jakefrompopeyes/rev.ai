@@ -2,6 +2,8 @@ import { prisma } from '@/lib/db';
 import { OpenAI } from 'openai';
 import { subDays, addDays, format, differenceInDays } from 'date-fns';
 
+const DEFAULT_FORECAST_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
 // Lazy load OpenAI client
 function getOpenAIClient(): OpenAI | null {
   if (!process.env.OPENAI_API_KEY) {
@@ -51,6 +53,66 @@ export interface ForecastResult {
     modelAccuracy: number;
   };
   generatedAt: string;
+}
+
+function getForecastCacheTtlMs(): number {
+  const raw = process.env.FORECAST_CACHE_TTL_MS;
+  if (!raw) return DEFAULT_FORECAST_CACHE_TTL_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_FORECAST_CACHE_TTL_MS;
+}
+
+async function getCachedForecast(
+  organizationId: string,
+  cacheKey: string
+): Promise<ForecastResult | null> {
+  const cached = await prisma.forecastCache.findUnique({
+    where: {
+      organizationId_cacheKey: { organizationId, cacheKey },
+    },
+  });
+
+  if (!cached) {
+    return null;
+  }
+
+  const now = Date.now();
+  if (cached.expiresAt.getTime() <= now) {
+    await prisma.forecastCache
+      .delete({
+        where: { organizationId_cacheKey: { organizationId, cacheKey } },
+      })
+      .catch(() => null);
+    return null;
+  }
+
+  return cached.data as ForecastResult;
+}
+
+async function setCachedForecast(
+  organizationId: string,
+  cacheKey: string,
+  daysAhead: number,
+  result: ForecastResult
+): Promise<void> {
+  const ttlMs = getForecastCacheTtlMs();
+  const expiresAt = new Date(Date.now() + ttlMs);
+
+  await prisma.forecastCache.upsert({
+    where: { organizationId_cacheKey: { organizationId, cacheKey } },
+    create: {
+      organizationId,
+      cacheKey,
+      daysAhead,
+      data: result,
+      expiresAt,
+    },
+    update: {
+      data: result,
+      daysAhead,
+      expiresAt,
+    },
+  });
 }
 
 /**
@@ -454,8 +516,14 @@ export async function getForecast(
   organizationId: string,
   daysAhead: number = 90
 ): Promise<ForecastResult> {
-  // For now, always generate fresh forecast
-  // TODO: Add caching layer for production
-  return generateForecast(organizationId, daysAhead);
+  const cacheKey = `classic:${daysAhead}`;
+  const cached = await getCachedForecast(organizationId, cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const forecast = await generateForecast(organizationId, daysAhead);
+  await setCachedForecast(organizationId, cacheKey, daysAhead, forecast);
+  return forecast;
 }
 

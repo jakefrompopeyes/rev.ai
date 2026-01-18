@@ -14,7 +14,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const quickStats = searchParams.get('quick') === 'true';
     const discountParam = searchParams.get('discount');
-    const annualDiscount = discountParam ? parseInt(discountParam, 10) : undefined;
+    const parsedDiscount = discountParam ? Number.parseInt(discountParam, 10) : NaN;
+    const annualDiscount = Number.isFinite(parsedDiscount)
+      ? Math.min(Math.max(parsedDiscount, 0), 50)
+      : undefined;
 
     if (quickStats) {
       const stats = await getAnnualPlanOpportunityQuickStats(organizationId);

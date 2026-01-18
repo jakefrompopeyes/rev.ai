@@ -17,6 +17,10 @@ import {
   Users,
   Target,
   TrendingDown,
+  Calendar,
+  History,
+  ShieldCheck,
+  Tag,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
@@ -24,6 +28,7 @@ import { createClient } from '@/lib/supabase/client';
 export default function LandingPage() {
   const router = useRouter();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const freeReportHref = `/login?redirect=${encodeURIComponent('/dashboard?flow=free-report')}`;
 
   useEffect(() => {
     const supabase = createClient();
@@ -82,7 +87,7 @@ export default function LandingPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       {/* Navigation */}
       <nav className="border-b border-border/50 bg-background/80 backdrop-blur-lg fixed top-0 inset-x-0 z-50">
         <div className="max-w-6xl mx-auto px-6 py-4">
@@ -100,7 +105,7 @@ export default function LandingPage() {
               <Link href="/login">
                 <Button variant="ghost" size="sm">Sign In</Button>
               </Link>
-              <Link href="/report">
+              <Link href={freeReportHref}>
                 <Button size="sm" className="gap-1.5">
                   Free report
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -135,7 +140,7 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/report">
+              <Link href={freeReportHref}>
                 <Button size="lg" className="gap-2 text-base px-8">
                   Generate free Stripe report
                   <ArrowRight className="h-4 w-4" />
@@ -215,8 +220,172 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Feature Previews */}
+      <section className="py-20 px-6 bg-transparent">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold tracking-tight">
+              AI-Powered Pricing Intelligence
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              Discover revenue opportunities hidden in your Stripe data
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Annual Plan Opportunity Preview */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="rounded-2xl border border-border bg-card shadow-xl shadow-primary/5 overflow-hidden"
+            >
+              <div className="p-1.5 bg-muted/50 border-b border-border flex items-center gap-1.5">
+                <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+                <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg bg-emerald-500/10 p-2">
+                    <Calendar className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <h3 className="font-semibold text-lg">Annual Plan Opportunity</h3>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-3xl font-bold text-foreground">127</div>
+                    <div className="text-sm text-muted-foreground">monthly subscribers ready for annual</div>
+                  </div>
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+                    <div className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
+                      +$48,200/year cash flow gain
+                    </div>
+                    <div className="text-xs text-emerald-700/80 dark:text-emerald-300/70 mt-1">
+                      With 10% annual discount, ~25% expected conversion
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Legacy Pricing Detection Preview */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="rounded-2xl border border-border bg-card shadow-xl shadow-primary/5 overflow-hidden"
+            >
+              <div className="p-1.5 bg-muted/50 border-b border-border flex items-center gap-1.5">
+                <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+                <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg bg-purple-500/10 p-2">
+                    <History className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <h3 className="font-semibold text-lg">Legacy Pricing Detection</h3>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-3xl font-bold text-foreground">43 customers</div>
+                    <div className="text-sm text-muted-foreground">paying 18% below current rates</div>
+                  </div>
+                  <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-900 dark:bg-purple-950/30">
+                    <div className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                      $62,400/year recoverable
+                    </div>
+                    <div className="text-xs text-purple-700/80 dark:text-purple-300/70 mt-1">
+                      Legacy customers churn 2.1% less—safe to migrate
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Price Increase Safety Preview */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="rounded-2xl border border-border bg-card shadow-xl shadow-primary/5 overflow-hidden"
+            >
+              <div className="p-1.5 bg-muted/50 border-b border-border flex items-center gap-1.5">
+                <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+                <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg bg-emerald-500/10 p-2">
+                    <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <h3 className="font-semibold text-lg">Price Increase Safety</h3>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-3xl font-bold text-foreground">87%</div>
+                    <div className="text-sm text-muted-foreground">retention after past increases</div>
+                  </div>
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+                    <div className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
+                      Safe to increase up to 15%
+                    </div>
+                    <div className="text-xs text-emerald-700/80 dark:text-emerald-300/70 mt-1">
+                      Based on 23 price increases affecting 156 customers
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Discount Analysis Preview */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="rounded-2xl border border-border bg-card shadow-xl shadow-primary/5 overflow-hidden"
+            >
+              <div className="p-1.5 bg-muted/50 border-b border-border flex items-center gap-1.5">
+                <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+                <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg bg-red-500/10 p-2">
+                    <Tag className="h-5 w-5 text-red-600 dark:text-red-400" />
+                  </div>
+                  <h3 className="font-semibold text-lg">Discount Analysis</h3>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-3xl font-bold text-foreground">34%</div>
+                    <div className="text-sm text-muted-foreground">of discounts were unnecessary</div>
+                  </div>
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/30">
+                    <div className="text-sm font-medium text-red-800 dark:text-red-200">
+                      $28,500/year recoverable
+                    </div>
+                    <div className="text-xs text-red-700/80 dark:text-red-300/70 mt-1">
+                      89 customers paid full price later or upgraded
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
-      <section className="py-20 px-6 bg-muted/30">
+      <section className="py-20 px-6 bg-transparent">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold tracking-tight">
@@ -264,7 +433,7 @@ export default function LandingPage() {
             <p className="mt-4 text-white/80 max-w-lg mx-auto">
               Join B2B SaaS teams using AI to make smarter pricing and retention decisions.
             </p>
-            <Link href="/report">
+            <Link href={freeReportHref}>
               <Button
                 size="lg"
                 className="mt-8 bg-white text-primary hover:bg-white/90 gap-2"

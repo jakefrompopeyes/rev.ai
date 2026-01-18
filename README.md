@@ -53,6 +53,7 @@ discovred connects to your Stripe account via secure OAuth (read-only) and provi
 - PostgreSQL database
 - Stripe account with OAuth enabled
 - OpenAI API key (for AI features)
+ - Supabase project (for auth)
 
 ### Installation
 
@@ -70,12 +71,20 @@ discovred connects to your Stripe account via secure OAuth (read-only) and provi
    Edit `.env.local` with your credentials:
    ```env
    DATABASE_URL="postgresql://..."
-   NEXTAUTH_SECRET="your-secret"
-   STRIPE_CLIENT_ID="ca_xxx"
-   STRIPE_SECRET_KEY="sk_xxx"
+    NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
+    NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
+    SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+    STRIPE_MODE="test"
+    STRIPE_CLIENT_ID_TEST="ca_xxx"
+    STRIPE_SECRET_KEY_TEST="sk_test_xxx"
+    STRIPE_PUBLISHABLE_KEY_TEST="pk_test_xxx"
+    STRIPE_WEBHOOK_SECRET="whsec_xxx"
    OPENAI_API_KEY="sk-xxx"
+    PII_HASH_SECRET="replace-with-random-32-bytes"
+    ADMIN_API_KEY="set-a-random-admin-key"
    APP_URL="http://localhost:3000"
    ```
+   For the full list (including Stripe price IDs), see `env.template`.
 
 3. **Set up database**
    ```bash
@@ -128,13 +137,13 @@ discovred connects to your Stripe account via secure OAuth (read-only) and provi
 discovred/
 ├── app/                    # Next.js App Router
 │   ├── api/               # API routes
-│   │   ├── auth/          # NextAuth endpoints
 │   │   ├── stripe/        # Stripe OAuth & sync
 │   │   ├── metrics/       # Metrics API
 │   │   ├── insights/      # Insights API
 │   │   └── recommendations/ # Recommendations API
 │   ├── dashboard/         # Main dashboard page
 │   ├── login/             # Authentication page
+│   ├── auth/              # Supabase OAuth callback
 │   └── page.tsx           # Landing page
 ├── components/            # React components
 │   ├── ui/               # Reusable UI components
@@ -143,7 +152,7 @@ discovred/
 │   ├── stripe/           # Stripe client & sync
 │   ├── metrics/          # Metrics computation
 │   ├── ai/               # AI insights & recommendations
-│   ├── auth.ts           # NextAuth configuration
+│   ├── supabase/         # Supabase auth helpers
 │   └── db.ts             # Prisma client
 ├── prisma/               # Database
 │   └── schema.prisma     # Database schema

@@ -120,6 +120,7 @@ export interface PriceIncreaseSafetySummary {
   
   // Overall numbers
   totalPriceIncreases: number;
+  completedPriceIncreases: number;
   customersAffected: number;
   
   // Overall outcomes
@@ -342,6 +343,7 @@ function calculateSummary(
   const churnedEvents = events.filter(e => e.outcome === 'churned');
   
   const totalPriceIncreases = events.length;
+  const completedPriceIncreases = completedEvents.length;
   const customersAffected = new Set(events.map(e => e.customerId)).size;
   
   // Calculate retention/churn rates
@@ -444,6 +446,7 @@ function calculateSummary(
     analyzedTo: endDate,
     
     totalPriceIncreases,
+    completedPriceIncreases,
     customersAffected,
     
     overallRetentionRate: Math.round(overallRetentionRate * 10) / 10,
@@ -574,12 +577,11 @@ function aggregateByPlan(
     const safeToIncrease = riskLevel === 'LOW' && completedEvents.length >= ANALYSIS_CONFIG.MIN_SAMPLE_SIZE;
     
     // Calculate max safe increase based on historical data
-    const historicalIncreases = priceIncreases.map(p => p.increasePercent);
-    const maxHistoricalSafeIncrease = historicalIncreases.length > 0
-      ? Math.max(...historicalIncreases.filter((_, i) => {
-          // Only count increases where most customers stayed
-          return customersStayed >= customersChurned;
-        }))
+    const safeHistoricalIncreases = priceIncreases
+      .filter(() => customersStayed >= customersChurned)
+      .map(p => p.increasePercent);
+    const maxHistoricalSafeIncrease = safeHistoricalIncreases.length > 0
+      ? Math.max(...safeHistoricalIncreases)
       : 10; // Default 10% if no data
     
     const confidence = completedEvents.length >= ANALYSIS_CONFIG.MIN_SAMPLE_SIZE

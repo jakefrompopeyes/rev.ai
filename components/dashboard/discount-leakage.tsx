@@ -230,16 +230,16 @@ function StatCard({
   };
   
   return (
-    <Card className="bg-zinc-900/50 border-zinc-800">
+    <Card className="bg-card/80 border-border/60 shadow-sm dark:bg-zinc-900/50 dark:border-zinc-800">
       <CardContent className="pt-4">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${colors[color]}`}>
             <Icon className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">{value}</p>
-            <p className="text-xs text-zinc-500">{label}</p>
-            {subValue && <p className="text-xs text-zinc-600 mt-0.5">{subValue}</p>}
+            <p className="text-2xl font-bold text-foreground dark:text-white">{value}</p>
+            <p className="text-xs text-muted-foreground dark:text-zinc-500">{label}</p>
+            {subValue && <p className="text-xs text-muted-foreground/70 dark:text-zinc-600 mt-0.5">{subValue}</p>}
           </div>
         </div>
       </CardContent>
@@ -257,15 +257,16 @@ export function DiscountLeakage({ variant = 'full' }: { variant?: DiscountLeakag
   const [report, setReport] = useState<DiscountLeakageReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [strictMode, setStrictMode] = useState(true);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(['evidence', 'recommendations', 'coupons'])
   );
 
-    async function fetchData() {
+    async function fetchData(mode: boolean = strictMode) {
       try {
         setLoading(true);
       setError(null);
-        const response = await fetch('/api/discount-leakage');
+        const response = await fetch(`/api/discount-leakage?strict=${mode ? 'true' : 'false'}`);
         const data = await response.json();
         
         if (!data.success) {
@@ -281,8 +282,9 @@ export function DiscountLeakage({ variant = 'full' }: { variant?: DiscountLeakag
     }
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData(strictMode);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strictMode]);
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => {
@@ -303,7 +305,7 @@ export function DiscountLeakage({ variant = 'full' }: { variant?: DiscountLeakag
           <div className="flex flex-col items-center gap-3">
             <Spinner />
             <p className="text-sm text-zinc-500">Analyzing discount patterns...</p>
-            <p className="text-xs text-zinc-600">Checking renewal, upgrade & payment history</p>
+            <p className="text-xs text-zinc-600">Checking full-price and upgrade history</p>
           </div>
         </CardContent>
       </Card>
@@ -337,37 +339,70 @@ export function DiscountLeakage({ variant = 'full' }: { variant?: DiscountLeakag
   const { summary, couponLeakage, customerLeakage, planLeakage, leakedDiscounts, aiNarrative, aiRecommendations } = report;
 
   const hero = (
-    <Card className="relative overflow-hidden bg-gradient-to-br from-red-950/30 via-zinc-900/50 to-zinc-900/50 border-red-900/30">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(239,68,68,0.1),transparent_50%)]" />
+    <Card className="relative overflow-hidden bg-card/80 border-border/60 shadow-sm dark:bg-gradient-to-br dark:from-red-950/30 dark:via-zinc-900/50 dark:to-zinc-900/50 dark:border-red-900/30">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(239,68,68,0.08),transparent_50%)] dark:bg-[radial-gradient(ellipse_at_top_right,rgba(239,68,68,0.1),transparent_50%)]" />
       <CardContent className="relative pt-6">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="h-5 w-5 text-red-400" />
-              <span className="text-sm font-medium text-red-400">Evidence-Based Discount Analysis</span>
+              <Sparkles className="h-5 w-5 text-red-600 dark:text-red-400" />
+              <span className="text-sm font-medium text-red-600 dark:text-red-400">Evidence-Based Discount Analysis</span>
+              <div className="ml-2 flex items-center gap-1 rounded-lg border border-border/60 bg-card/80 p-1">
+                <Button
+                  size="sm"
+                  variant={strictMode ? 'default' : 'outline'}
+                  onClick={() => setStrictMode(true)}
+                  className="h-7 px-2 text-xs"
+                >
+                  Strict
+                </Button>
+                <Button
+                  size="sm"
+                  variant={!strictMode ? 'default' : 'outline'}
+                  onClick={() => setStrictMode(false)}
+                  className="h-7 px-2 text-xs"
+                >
+                  Relaxed
+                </Button>
+              </div>
+              <span className="relative ml-1 inline-flex items-center group">
+                <span
+                  aria-label={strictMode ? 'Strict explanation' : 'Relaxed explanation'}
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/60 text-[11px] text-muted-foreground"
+                >
+                  i
+                </span>
+                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-card/95 px-2.5 py-2 text-[11px] text-foreground/80 shadow-md opacity-0 transition-opacity group-hover:opacity-100">
+                  {strictMode
+                    ? 'Strict counts only invoices that later paid full price or upgraded.'
+                    : 'Relaxed also counts renewals as evidence of willingness to pay.'}
+                </span>
+              </span>
             </div>
-            <h2 className="text-4xl font-bold text-white mb-2">
+            <h2 className="text-4xl font-bold text-foreground dark:text-white mb-2">
               <AnimatedNumber value={summary.leakageRate} />%
             </h2>
-            <p className="text-lg text-zinc-300 max-w-md">
-              of discounts were given to customers who didn&apos;t need them
+            <p className="text-lg text-foreground/80 dark:text-zinc-300 max-w-md">
+              {strictMode
+                ? 'of discounted subscription invoices later paid full price or upgraded'
+                : 'of discounted subscription invoices later renewed, paid full price, or upgraded'}
             </p>
-            <p className="text-sm text-zinc-500 mt-2">
-              Based on {summary.totalDiscountedInvoices} discounted invoices over {summary.periodDays} days
+            <p className="text-sm text-muted-foreground dark:text-zinc-500 mt-2">
+              Based on {summary.totalDiscountedInvoices} discounted subscription invoices over {summary.periodDays} days
             </p>
           </div>
           <div className="text-right space-y-4">
             <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wider">Total Leakage</p>
-              <p className="text-2xl font-bold text-red-400">{formatCurrency(summary.totalLeakage)}</p>
+              <p className="text-xs text-muted-foreground dark:text-zinc-500 uppercase tracking-wider">Total Leakage</p>
+              <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(summary.totalLeakage)}</p>
             </div>
             <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wider">Last 30 Days</p>
-              <p className="text-xl font-semibold text-red-300">{formatCurrency(summary.leakageLast30Days)}</p>
+              <p className="text-xs text-muted-foreground dark:text-zinc-500 uppercase tracking-wider">Last 30 Days</p>
+              <p className="text-xl font-semibold text-red-500 dark:text-red-300">{formatCurrency(summary.leakageLast30Days)}</p>
             </div>
             <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wider">Potential Recovery</p>
-              <p className="text-xl font-semibold text-emerald-400">{formatCurrency(summary.potentialRecoveryWithFix)}/yr</p>
+              <p className="text-xs text-muted-foreground dark:text-zinc-500 uppercase tracking-wider">Potential Recovery</p>
+              <p className="text-xl font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(summary.potentialRecoveryWithFix)}/yr</p>
             </div>
           </div>
         </div>
@@ -403,7 +438,7 @@ export function DiscountLeakage({ variant = 'full' }: { variant?: DiscountLeakag
             )}
           </div>
           <CardDescription className="text-xs hidden group-hover:block group-data-[expanded=true]:block">
-            Evidence from actual customer behavior, not predictions
+            Strong signals are full-price payments or meaningful upgrades
           </CardDescription>
         </CardHeader>
         {expandedSections.has('evidence') && (
@@ -413,7 +448,7 @@ export function DiscountLeakage({ variant = 'full' }: { variant?: DiscountLeakag
               <div className="p-4 rounded-lg bg-blue-950/20 border border-blue-900/30">
                 <div className="flex items-center gap-2 mb-3">
                   <RefreshCw className="h-5 w-5 text-blue-400" />
-                  <h4 className="font-semibold text-white">They Renewed</h4>
+                  <h4 className="font-semibold text-white">They Renewed (Context)</h4>
                 </div>
                 <p className="text-3xl font-bold text-blue-400 mb-1">
                   {summary.renewedWithoutNeedingDiscount}
@@ -422,7 +457,7 @@ export function DiscountLeakage({ variant = 'full' }: { variant?: DiscountLeakag
                   customers renewed after discounted invoice
                 </p>
                 <p className="text-xs text-zinc-600 mt-2">
-                  If they renewed, they likely would have paid full price initially
+                  Renewal alone isn&apos;t proof, but it supports stronger signals
                 </p>
               </div>
               

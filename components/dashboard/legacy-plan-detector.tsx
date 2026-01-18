@@ -217,16 +217,16 @@ function StatCard({
   };
   
   return (
-    <Card className="bg-zinc-900/50 border-zinc-800">
+    <Card className="bg-card/80 border-border/60 shadow-sm dark:bg-zinc-900/50 dark:border-zinc-800">
       <CardContent className="pt-4">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${colors[color]}`}>
             <Icon className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">{value}</p>
-            <p className="text-xs text-zinc-500">{label}</p>
-            {subValue && <p className="text-xs text-zinc-600 mt-0.5">{subValue}</p>}
+            <p className="text-2xl font-bold text-foreground dark:text-white">{value}</p>
+            <p className="text-xs text-muted-foreground dark:text-zinc-500">{label}</p>
+            {subValue && <p className="text-xs text-muted-foreground/70 dark:text-zinc-600 mt-0.5">{subValue}</p>}
           </div>
         </div>
       </CardContent>
@@ -464,6 +464,7 @@ export function LegacyPlanDetector({ variant = 'full' }: { variant?: LegacyPlanD
 
   // No legacy customers found
   if (summary.customersOnLegacyPricing === 0) {
+    const hasActiveCustomers = summary.totalActiveCustomers > 0;
     const emptyState = (
       <Card className="bg-zinc-900/50 border-zinc-800">
         <CardContent className="flex items-center justify-center py-16">
@@ -471,11 +472,13 @@ export function LegacyPlanDetector({ variant = 'full' }: { variant?: LegacyPlanD
             <div className="p-3 rounded-full bg-emerald-500/10">
               <CheckCircle className="h-8 w-8 text-emerald-400" />
             </div>
-            <h3 className="text-lg font-semibold text-white">No Legacy Pricing Detected</h3>
+            <h3 className="text-lg font-semibold text-white">
+              {hasActiveCustomers ? 'No Legacy Pricing Detected' : 'No Active Customers Yet'}
+            </h3>
             <p className="text-sm text-zinc-400 max-w-md">
-              All your active customers are paying current market rates. 
-              As you adjust pricing over time, this detector will surface customers 
-              who may be paying below your current rates.
+              {hasActiveCustomers
+                ? `All your active customers are paying current market rates. As you adjust pricing over time, this detector will surface customers who may be paying below your current rates.`
+                : `Once you have active subscriptions, this detector will compare customer pricing to your current rates and surface legacy pricing risks.`}
             </p>
           </div>
         </CardContent>
@@ -493,41 +496,41 @@ export function LegacyPlanDetector({ variant = 'full' }: { variant?: LegacyPlanD
   const hasOpportunity = summary.churnComparison.legacyMoreStable && summary.safeToMigrateCount > 0;
 
   const heroCard = (
-    <Card className={`relative overflow-hidden bg-gradient-to-br ${hasOpportunity ? 'from-purple-950/30 via-zinc-900/50' : 'from-amber-950/30 via-zinc-900/50'} to-zinc-900/50 ${hasOpportunity ? 'border-purple-900/30' : 'border-amber-900/30'}`}>
-      <div className={`absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,${hasOpportunity ? 'rgba(168,85,247,0.1)' : 'rgba(245,158,11,0.1)'},transparent_50%)]`} />
+    <Card className={`relative overflow-hidden bg-card/80 border-border/60 shadow-sm dark:bg-gradient-to-br ${hasOpportunity ? 'dark:from-purple-950/30 dark:via-zinc-900/50' : 'dark:from-amber-950/30 dark:via-zinc-900/50'} dark:to-zinc-900/50 ${hasOpportunity ? 'dark:border-purple-900/30' : 'dark:border-amber-900/30'}`}>
+      <div className={`absolute inset-0 ${hasOpportunity ? 'bg-[radial-gradient(ellipse_at_top_right,rgba(168,85,247,0.08),transparent_50%)] dark:bg-[radial-gradient(ellipse_at_top_right,rgba(168,85,247,0.1),transparent_50%)]' : 'bg-[radial-gradient(ellipse_at_top_right,rgba(245,158,11,0.08),transparent_50%)] dark:bg-[radial-gradient(ellipse_at_top_right,rgba(245,158,11,0.1),transparent_50%)]'}`} />
       <CardContent className="relative pt-6">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <History className={`h-5 w-5 ${hasOpportunity ? 'text-purple-400' : 'text-amber-400'}`} />
-              <span className={`text-sm font-medium ${hasOpportunity ? 'text-purple-400' : 'text-amber-400'}`}>
+              <History className={`h-5 w-5 ${hasOpportunity ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'}`} />
+              <span className={`text-sm font-medium ${hasOpportunity ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'}`}>
                 Legacy Plan Detector
               </span>
             </div>
-            <h2 className="text-4xl font-bold text-white mb-2">
+            <h2 className="text-4xl font-bold text-foreground dark:text-white mb-2">
               <AnimatedNumber value={summary.customersOnLegacyPricing} /> customers
             </h2>
-            <p className="text-lg text-zinc-300 max-w-md">
+            <p className="text-lg text-foreground/80 dark:text-zinc-300 max-w-md">
               are on legacy pricing, paying{' '}
-              <span className={hasOpportunity ? 'text-purple-400' : 'text-amber-400'}>
+              <span className={hasOpportunity ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'}>
                 {summary.averagePricingGapPercent.toFixed(0)}% below
               </span>{' '}
               current rates
             </p>
-            <p className="text-sm text-zinc-500 mt-2">
+            <p className="text-sm text-muted-foreground dark:text-zinc-500 mt-2">
               {summary.legacyPercent.toFixed(0)}% of your {summary.totalActiveCustomers} active customers
             </p>
           </div>
           <div className="text-right space-y-4">
             <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wider">Annual Revenue Gap</p>
-              <p className={`text-2xl font-bold ${hasOpportunity ? 'text-purple-400' : 'text-amber-400'}`}>
+              <p className="text-xs text-muted-foreground dark:text-zinc-500 uppercase tracking-wider">Annual Revenue Gap</p>
+              <p className={`text-2xl font-bold ${hasOpportunity ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'}`}>
                 {formatCurrency(summary.totalAnnualRevenueGap)}
               </p>
             </div>
             <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wider">Recoverable</p>
-              <p className="text-xl font-semibold text-emerald-400">
+              <p className="text-xs text-muted-foreground dark:text-zinc-500 uppercase tracking-wider">Recoverable</p>
+              <p className="text-xl font-semibold text-emerald-600 dark:text-emerald-400">
                 {formatCurrency(summary.projectedRecoveryWithMigration)}/yr
               </p>
             </div>

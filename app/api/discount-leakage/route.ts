@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
     // Check if quick stats only requested
     const { searchParams } = new URL(request.url);
     const quickStats = searchParams.get('quick') === 'true';
+    const strict = searchParams.get('strict') !== 'false';
 
     if (quickStats) {
       const stats = await getDiscountLeakageQuickStats(organizationId);
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Full analysis
-    const report = await analyzeDiscountLeakage(organizationId);
+    const report = await analyzeDiscountLeakage(organizationId, { strict });
     
     return NextResponse.json({
       success: true,

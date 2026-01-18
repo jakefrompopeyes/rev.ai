@@ -179,16 +179,16 @@ function StatCard({
   };
   
   return (
-    <Card className="bg-zinc-900/50 border-zinc-800">
+    <Card className="bg-card/80 border-border/60 shadow-sm dark:bg-zinc-900/50 dark:border-zinc-800">
       <CardContent className="pt-4">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${colors[color]}`}>
             <Icon className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">{value}</p>
-            <p className="text-xs text-zinc-500">{label}</p>
-            {subValue && <p className="text-xs text-zinc-600 mt-0.5">{subValue}</p>}
+            <p className="text-2xl font-bold text-foreground dark:text-white">{value}</p>
+            <p className="text-xs text-muted-foreground dark:text-zinc-500">{label}</p>
+            {subValue && <p className="text-xs text-muted-foreground/70 dark:text-zinc-600 mt-0.5">{subValue}</p>}
           </div>
         </div>
       </CardContent>
@@ -236,10 +236,19 @@ export function AnnualPlanOpportunity({ variant = 'full' }: { variant?: AnnualPl
       setLoading(true);
       setError(null);
       const response = await fetch(`/api/annual-plan-opportunity?discount=${discount}`);
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch annual plan opportunity data');
+      let data: any = null;
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(data?.error || `Request failed (${response.status})`);
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to fetch annual plan opportunity data');
       }
       
       setReport(data.data);
@@ -256,6 +265,7 @@ export function AnnualPlanOpportunity({ variant = 'full' }: { variant?: AnnualPl
   }, []);
 
   const handleDiscountChange = (newDiscount: number) => {
+    if (newDiscount === discountPercent) return;
     setDiscountPercent(newDiscount);
     fetchData(newDiscount);
   };
@@ -312,43 +322,59 @@ export function AnnualPlanOpportunity({ variant = 'full' }: { variant?: AnnualPl
 
   const { summary, candidates, planBreakdown, aiNarrative, aiRecommendations } = report;
 
+  const hasMonthlyCustomers = summary.totalMonthlyCustomers > 0;
+  const hasEligibleCustomers = summary.eligibleCustomers > 0;
+  const heroMessage = hasEligibleCustomers
+    ? 'monthly subscribers would probably commit yearly if asked'
+    : hasMonthlyCustomers
+      ? 'No eligible customers yet — look for 6+ months tenure, ≤1 failed payment in 12 months, no discounts.'
+      : 'No active monthly customers detected yet.';
+
   const heroCard = (
-    <Card className="relative overflow-hidden bg-gradient-to-br from-emerald-950/30 via-zinc-900/50 to-zinc-900/50 border-emerald-900/30">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.1),transparent_50%)]" />
+    <Card className="relative overflow-hidden bg-card/80 border-border/60 shadow-sm dark:bg-gradient-to-br dark:from-emerald-950/30 dark:via-zinc-900/50 dark:to-zinc-900/50 dark:border-emerald-900/30">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.08),transparent_50%)] dark:bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.1),transparent_50%)]" />
       <CardContent className="relative pt-6">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <Calendar className="h-5 w-5 text-emerald-400" />
-              <span className="text-sm font-medium text-emerald-400">Annual Plan Opportunity</span>
+              <Calendar className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Annual Plan Opportunity</span>
             </div>
-            <h2 className="text-4xl font-bold text-white mb-2">
+            <h2 className="text-4xl font-bold text-foreground dark:text-white mb-2">
               <AnimatedNumber value={summary.eligibleCustomers} />
             </h2>
-            <p className="text-lg text-zinc-300 max-w-md">
-              monthly subscribers would probably commit yearly if asked
+            <p className={`${hasEligibleCustomers ? 'text-lg' : 'text-sm'} text-foreground/80 dark:text-zinc-300 max-w-md`}>
+              {heroMessage}
             </p>
-            <p className="text-sm text-zinc-500 mt-2">
-              {summary.eligiblePercent.toFixed(0)}% of your {summary.totalMonthlyCustomers} monthly customers
-            </p>
+            {hasMonthlyCustomers ? (
+              <p className="text-sm text-muted-foreground dark:text-zinc-500 mt-2">
+                {summary.eligiblePercent.toFixed(0)}% of your {summary.totalMonthlyCustomers} monthly customers
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground/80 dark:text-zinc-600 mt-2">
+                We need at least one active monthly subscription to run this analysis.
+              </p>
+            )}
           </div>
           <div className="text-right space-y-4">
             <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wider">Expected Cash Flow Gain</p>
-              <p className="text-2xl font-bold text-emerald-400">{formatCurrency(summary.expectedCashFlowGain)}</p>
+              <p className="text-xs text-muted-foreground dark:text-zinc-500 uppercase tracking-wider">Expected Cash Flow Gain</p>
+              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(summary.expectedCashFlowGain)}</p>
             </div>
             <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wider">With {summary.annualDiscountPercent}% Discount</p>
-              <p className="text-xl font-semibold text-emerald-300">{formatCurrency(summary.projectedAnnualCashFlow)}</p>
-              <p className="text-xs text-zinc-600">vs ${Math.round(summary.totalCurrentMonthlyRevenue * 12 / 100).toLocaleString()}/yr at monthly</p>
+              <p className="text-xs text-muted-foreground dark:text-zinc-500 uppercase tracking-wider">With {summary.annualDiscountPercent}% Discount</p>
+              <p className="text-xl font-semibold text-emerald-600/90 dark:text-emerald-300">{formatCurrency(summary.projectedAnnualCashFlow)}</p>
+              <p className="text-xs text-muted-foreground/70 dark:text-zinc-600">
+                vs {formatCurrency(summary.totalCurrentMonthlyRevenue * 12)}/yr from eligible monthly subscribers
+              </p>
             </div>
           </div>
         </div>
         
         {/* Discount Slider */}
-        <div className="mt-6 pt-4 border-t border-zinc-800">
+        <div className="mt-6 pt-4 border-t border-border/60 dark:border-zinc-800">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-zinc-400">Annual Discount</span>
+            <span className="text-sm text-muted-foreground dark:text-zinc-400">Annual Discount</span>
             <div className="flex items-center gap-3">
               {[5, 10, 15, 20].map(d => (
                 <button
@@ -356,8 +382,8 @@ export function AnnualPlanOpportunity({ variant = 'full' }: { variant?: AnnualPl
                   onClick={() => handleDiscountChange(d)}
                   className={`px-3 py-1 rounded-full text-sm transition-colors ${
                     discountPercent === d
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700/50'
+                      ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                      : 'bg-muted/50 text-muted-foreground hover:bg-muted dark:bg-zinc-800/50 dark:text-zinc-400 dark:hover:bg-zinc-700/50'
                   }`}
                 >
                   {d}%
@@ -425,7 +451,7 @@ export function AnnualPlanOpportunity({ variant = 'full' }: { variant?: AnnualPl
               <div className="p-4 rounded-lg bg-emerald-950/20 border border-emerald-900/30">
                 <div className="flex items-center gap-2 mb-3">
                   <CreditCard className="h-5 w-5 text-emerald-400" />
-                  <h4 className="font-semibold text-white">Perfect Payments</h4>
+                  <h4 className="font-semibold text-white">Low Payment Failures</h4>
                 </div>
                 <p className="text-3xl font-bold text-emerald-400 mb-1">
                   {summary.percentWithPerfectHistory.toFixed(0)}%
@@ -674,7 +700,7 @@ export function AnnualPlanOpportunity({ variant = 'full' }: { variant?: AnnualPl
                 <Users className="h-12 w-12 text-zinc-700 mx-auto mb-3" />
                 <p className="text-sm text-zinc-500">No eligible candidates found</p>
                 <p className="text-xs text-zinc-600 mt-1">
-                  Customers need 6+ months tenure, no payment failures, and no active discounts
+                  Customers need 6+ months tenure, ≤1 failed payment in 12 months, and no active discounts
                 </p>
               </div>
             ) : (

@@ -25,7 +25,7 @@ const ANNUAL_OPPORTUNITY_CONFIG = {
   OPTIMAL_MAX_TENURE: 18,
   
   // Maximum failed payments allowed
-  MAX_FAILED_PAYMENTS: 0,
+  MAX_FAILED_PAYMENTS: 1,
   
   // Annual discount to offer (percentage)
   DEFAULT_ANNUAL_DISCOUNT: 10,
@@ -150,6 +150,7 @@ export async function analyzeAnnualPlanOpportunity(
 ): Promise<AnnualPlanOpportunityReport> {
   const now = new Date();
   const tenureThreshold = subMonths(now, ANNUAL_OPPORTUNITY_CONFIG.MIN_TENURE_MONTHS);
+  const paymentFailureWindowStart = subMonths(now, 12);
   
   // Get all active MONTHLY subscriptions with customer data
   const subscriptions = await prisma.stripeSubscription.findMany({
@@ -186,6 +187,7 @@ export async function analyzeAnnualPlanOpportunity(
     where: {
       organizationId,
       status: 'failed',
+      stripeCreatedAt: { gte: paymentFailureWindowStart },
     },
     select: {
       customerId: true,

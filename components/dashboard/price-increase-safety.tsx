@@ -95,6 +95,7 @@ interface PriceIncreaseSafetySummary {
   analyzedFrom: string;
   analyzedTo: string;
   totalPriceIncreases: number;
+  completedPriceIncreases: number;
   customersAffected: number;
   overallRetentionRate: number;
   overallChurnRate: number;
@@ -132,6 +133,8 @@ interface PriceIncreaseSafetyReport {
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
+
+const MIN_SAMPLE_SIZE = 5;
 
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -200,7 +203,15 @@ function OutcomeBadge({ outcome }: { outcome: PriceIncreaseEvent['outcome'] }) {
   );
 }
 
-function SafetyGauge({ score, size = 120 }: { score: number; size?: number }) {
+function SafetyGauge({
+  score,
+  size = 120,
+  isInsufficient = false,
+}: {
+  score: number;
+  size?: number;
+  isInsufficient?: boolean;
+}) {
   const radius = (size - 20) / 2;
   const circumference = radius * Math.PI; // Half circle
   const offset = circumference - (score / 100) * circumference;
@@ -222,24 +233,34 @@ function SafetyGauge({ score, size = 120 }: { score: number; size?: number }) {
           fill="none"
           stroke="currentColor"
           strokeWidth="12"
-          className="text-zinc-800"
+          className={isInsufficient ? 'text-zinc-700' : 'text-zinc-800'}
           strokeLinecap="round"
         />
-        {/* Foreground arc */}
-        <path
-          d={`M 10 ${size / 2} A ${radius} ${radius} 0 0 1 ${size - 10} ${size / 2}`}
-          fill="none"
-          stroke={stroke}
-          strokeWidth="12"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className="transition-all duration-1000 ease-out"
-        />
+        {!isInsufficient && (
+          <path
+            d={`M 10 ${size / 2} A ${radius} ${radius} 0 0 1 ${size - 10} ${size / 2}`}
+            fill="none"
+            stroke={stroke}
+            strokeWidth="12"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            className="transition-all duration-1000 ease-out"
+          />
+        )}
       </svg>
       <div className="absolute bottom-0 left-0 right-0 text-center">
-        <span className="text-3xl font-bold text-white">{Math.round(score)}</span>
-        <span className="text-sm text-zinc-500 block">Safety Score</span>
+        {isInsufficient ? (
+          <>
+            <span className="text-3xl font-bold text-foreground dark:text-white">N/A</span>
+            <span className="text-xs text-muted-foreground dark:text-zinc-500 block">Insufficient data</span>
+          </>
+        ) : (
+          <>
+            <span className="text-3xl font-bold text-foreground dark:text-white">{Math.round(score)}</span>
+            <span className="text-sm text-muted-foreground dark:text-zinc-500 block">Safety Score</span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -267,16 +288,16 @@ function StatCard({
   };
   
   return (
-    <Card className="bg-zinc-900/50 border-zinc-800">
+    <Card className="bg-card/80 border-border/60 shadow-sm dark:bg-zinc-900/50 dark:border-zinc-800">
       <CardContent className="pt-4">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${colors[color]}`}>
             <Icon className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">{value}</p>
-            <p className="text-xs text-zinc-500">{label}</p>
-            {subValue && <p className="text-xs text-zinc-600 mt-0.5">{subValue}</p>}
+            <p className="text-2xl font-bold text-foreground dark:text-white">{value}</p>
+            <p className="text-xs text-muted-foreground dark:text-zinc-500">{label}</p>
+            {subValue && <p className="text-xs text-muted-foreground/70 dark:text-zinc-600 mt-0.5">{subValue}</p>}
           </div>
         </div>
       </CardContent>
@@ -475,44 +496,56 @@ export function PriceIncreaseSafety({ variant = 'full' }: { variant?: PriceIncre
   if (!report) return null;
 
   const { summary, planSafety, segmentSensitivity, priceIncreaseEvents, aiNarrative, aiRecommendations } = report;
+  const completedPriceIncreases = summary.completedPriceIncreases ?? priceIncreaseEvents.filter(e => e.outcome !== 'pending').length;
+  const hasSufficientData = completedPriceIncreases >= MIN_SAMPLE_SIZE;
 
   // Determine the hero message based on safety
   const heroConfig = {
     LOW: {
-      gradient: 'from-emerald-950/30 via-zinc-900/50 to-zinc-900/50',
-      border: 'border-emerald-900/30',
+      darkGradient: 'dark:bg-gradient-to-br dark:from-emerald-950/30 dark:via-zinc-900/50 dark:to-zinc-900/50',
+      darkBorder: 'dark:border-emerald-900/30',
       iconBg: 'bg-emerald-500/10',
       icon: ShieldCheck,
-      iconColor: 'text-emerald-400',
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
       title: 'Safe to Raise Prices',
-      titleColor: 'text-emerald-400',
+      titleColor: 'text-emerald-600 dark:text-emerald-400',
     },
     MEDIUM: {
-      gradient: 'from-amber-950/30 via-zinc-900/50 to-zinc-900/50',
-      border: 'border-amber-900/30',
+      darkGradient: 'dark:bg-gradient-to-br dark:from-amber-950/30 dark:via-zinc-900/50 dark:to-zinc-900/50',
+      darkBorder: 'dark:border-amber-900/30',
       iconBg: 'bg-amber-500/10',
       icon: ShieldAlert,
-      iconColor: 'text-amber-400',
+      iconColor: 'text-amber-600 dark:text-amber-400',
       title: 'Proceed with Caution',
-      titleColor: 'text-amber-400',
+      titleColor: 'text-amber-600 dark:text-amber-400',
     },
     HIGH: {
-      gradient: 'from-red-950/30 via-zinc-900/50 to-zinc-900/50',
-      border: 'border-red-900/30',
+      darkGradient: 'dark:bg-gradient-to-br dark:from-red-950/30 dark:via-zinc-900/50 dark:to-zinc-900/50',
+      darkBorder: 'dark:border-red-900/30',
       iconBg: 'bg-red-500/10',
       icon: ShieldX,
-      iconColor: 'text-red-400',
+      iconColor: 'text-red-600 dark:text-red-400',
       title: 'High Churn Risk',
-      titleColor: 'text-red-400',
+      titleColor: 'text-red-600 dark:text-red-400',
     },
   };
 
-  const hero = heroConfig[summary.overallRiskLevel];
+  const hero = hasSufficientData
+    ? heroConfig[summary.overallRiskLevel]
+    : {
+        darkGradient: 'dark:bg-gradient-to-br dark:from-zinc-900/50 dark:via-zinc-900/50 dark:to-zinc-900/50',
+        darkBorder: 'dark:border-zinc-800/60',
+        iconBg: 'bg-zinc-500/10',
+        icon: Info,
+        iconColor: 'text-zinc-500',
+        title: 'Insufficient Data',
+        titleColor: 'text-zinc-200',
+      };
   const HeroIcon = hero.icon;
 
   const heroCard = (
-    <Card className={`relative overflow-hidden bg-gradient-to-br ${hero.gradient} ${hero.border}`}>
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.1),transparent_50%)]" />
+    <Card className={`relative overflow-hidden bg-card/80 border-border/60 shadow-sm ${hero.darkGradient} ${hero.darkBorder}`}>
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.08),transparent_50%)] dark:bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.1),transparent_50%)]" />
       <CardContent className="relative pt-6">
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -525,15 +558,28 @@ export function PriceIncreaseSafety({ variant = 'full' }: { variant?: PriceIncre
             <h2 className={`text-3xl font-bold mb-2 ${hero.titleColor}`}>
               {hero.title}
             </h2>
-            <p className="text-lg text-zinc-300 max-w-xl">
-              {summary.overallRetentionRate.toFixed(0)}% of customers stayed after past price increases
-            </p>
-            <p className="text-sm text-zinc-500 mt-2">
-              Based on {summary.totalPriceIncreases} price increases affecting {summary.customersAffected} customers over {summary.periodDays} days
-            </p>
+            {hasSufficientData ? (
+              <>
+                <p className="text-lg text-foreground/80 dark:text-zinc-300 max-w-xl">
+                  {summary.overallRetentionRate.toFixed(0)}% of customers stayed after past price increases
+                </p>
+                <p className="text-sm text-muted-foreground dark:text-zinc-500 mt-2">
+                  Based on {summary.totalPriceIncreases} price increases affecting {summary.customersAffected} customers over {summary.periodDays} days
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-lg text-foreground/80 dark:text-zinc-300 max-w-xl">
+                  Not enough completed price increases to score safety yet
+                </p>
+                <p className="text-sm text-muted-foreground dark:text-zinc-500 mt-2">
+                  Need at least {MIN_SAMPLE_SIZE} completed increases; currently {completedPriceIncreases}
+                </p>
+              </>
+            )}
           </div>
           <div className="hidden md:block">
-            <SafetyGauge score={summary.overallSafetyScore} />
+            <SafetyGauge score={summary.overallSafetyScore} isInsufficient={!hasSufficientData} />
           </div>
         </div>
       </CardContent>

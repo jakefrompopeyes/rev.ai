@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getSecretKey } from '@/lib/stripe/client';
 
@@ -35,9 +36,30 @@ export async function POST(request: Request) {
 
   console.log(`📨 Received Stripe webhook: ${event.type}`);
 
+  let webhookRecordId: string | null = null;
+  const stripeAccountId = event.account;
+
   try {
+    try {
+      const record = await prisma.stripeWebhookEvent.create({
+        data: {
+          eventId: event.id,
+          eventType: event.type,
+          stripeAccountId: stripeAccountId || null,
+          status: 'processing',
+        },
+        select: { id: true },
+      });
+      webhookRecordId = record.id;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        console.warn(`Duplicate webhook event received: ${event.id}`);
+        return NextResponse.json({ received: true });
+      }
+      throw error;
+    }
+
     // Find the organization by the connected account
-    const stripeAccountId = event.account;
     
     let connection;
     if (stripeAccountId) {
@@ -54,6 +76,12 @@ export async function POST(request: Request) {
 
     if (!connection) {
       console.warn('No active Stripe connection found for webhook');
+      if (webhookRecordId) {
+        await prisma.stripeWebhookEvent.update({
+          where: { id: webhookRecordId },
+          data: { status: 'ignored', processedAt: new Date() },
+        });
+      }
       return NextResponse.json({ received: true });
     }
 
@@ -121,9 +149,30 @@ export async function POST(request: Request) {
       data: { lastSyncAt: new Date(), lastSyncStatus: 'success' },
     });
 
+    if (webhookRecordId) {
+      await prisma.stripeWebhookEvent.update({
+        where: { id: webhookRecordId },
+        data: {
+          status: 'processed',
+          processedAt: new Date(),
+          organizationId,
+        },
+      });
+    }
+
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error('Error processing webhook:', error);
+    if (webhookRecordId) {
+      await prisma.stripeWebhookEvent.update({
+        where: { id: webhookRecordId },
+        data: {
+          status: 'failed',
+          processedAt: new Date(),
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        },
+      });
+    }
     return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
   }
 }

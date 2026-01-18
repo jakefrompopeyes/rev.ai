@@ -21,7 +21,15 @@ const LEAKAGE_CONFIG = {
   CHURN_WINDOW_DAYS: 60, // Customer must not churn within X days to count as "stayed"
   LOOKBACK_DAYS: 365,    // How far back to analyze discounted invoices
   MIN_INVOICES_FOR_ANALYSIS: 2, // Customer needs at least 2 invoices to analyze
+  UPGRADE_THRESHOLD_PERCENT: 0.1, // Require a meaningful increase to count as upgrade
+  UPGRADE_THRESHOLD_CENTS: 1000, // $10 minimum increase to avoid noise
 };
+
+const QUALIFYING_BILLING_REASONS = new Set([
+  'subscription_create',
+  'subscription_cycle',
+  'subscription_update',
+]);
 
 export interface LeakedDiscount {
   invoiceId: string;
@@ -172,8 +180,10 @@ export interface AIRecommendation {
 // ============================================================================
 
 export async function analyzeDiscountLeakage(
-  organizationId: string
+  organizationId: string,
+  options?: { strict?: boolean }
 ): Promise<DiscountLeakageReport> {
+  const strict = options?.strict ?? true;
   const endDate = new Date();
   const startDate = subDays(endDate, LEAKAGE_CONFIG.LOOKBACK_DAYS);
   
@@ -183,6 +193,8 @@ export async function analyzeDiscountLeakage(
       organizationId,
       status: 'paid',
       stripeCreatedAt: { gte: startDate },
+      subscriptionId: { not: null },
+      billingReason: { in: Array.from(QUALIFYING_BILLING_REASONS) },
     },
     include: {
       customer: true,
@@ -236,37 +248,44 @@ export async function analyzeDiscountLeakage(
     const customerInvs = customerInvoices.get(invoice.customerId) || [];
     const invoiceIndex = customerInvs.findIndex(i => i.id === invoice.id);
     const laterInvoices = customerInvs.slice(invoiceIndex + 1);
+    const laterInvoicesSameSub = invoice.subscriptionId
+      ? laterInvoices.filter(i => i.subscriptionId === invoice.subscriptionId)
+      : [];
     
     // Get subscription info for this invoice
     const subscription = invoice.subscriptionId 
       ? subscriptionMap.get(invoice.subscriptionId) 
       : null;
     
-    // Check 1: Did they renew? (Another invoice exists after this one)
-    const didRenew = laterInvoices.length > 0;
+    // Check 1: Did they renew the same subscription?
+    const didRenew = laterInvoicesSameSub.length > 0;
     
     // Check if churned within window
-    const lastInvoiceDate = laterInvoices.length > 0 
-      ? laterInvoices[laterInvoices.length - 1].stripeCreatedAt 
+    const lastInvoiceDate = laterInvoicesSameSub.length > 0 
+      ? laterInvoicesSameSub[laterInvoicesSameSub.length - 1].stripeCreatedAt 
       : null;
-    const daysSinceDiscount = differenceInDays(new Date(), invoice.stripeCreatedAt);
-    const churnedWithinWindow = subscription?.canceledAt 
-      ? differenceInDays(subscription.canceledAt, invoice.stripeCreatedAt) <= LEAKAGE_CONFIG.CHURN_WINDOW_DAYS
+    const canceledAt = subscription?.canceledAt || subscription?.endedAt || null;
+    const churnedWithinWindow = canceledAt
+      ? differenceInDays(canceledAt, invoice.stripeCreatedAt) <= LEAKAGE_CONFIG.CHURN_WINDOW_DAYS
       : false;
     
     // Skip if churned within window - discount may have been needed
     if (churnedWithinWindow) continue;
     
-    // Check 2: Did they pay full price later?
-    const paidFullPriceLater = laterInvoices.some(inv => 
-      inv.discountAmount === 0 || inv.total === inv.subtotal
+    // Check 2: Did they pay full price later on the same subscription?
+    const paidFullPriceLater = laterInvoicesSameSub.some(inv => 
+      inv.discountAmount === 0 && inv.subtotal >= invoice.subtotal
     );
     
-    // Check 3: Did they upgrade? (Later invoice with higher amount paid)
-    const upgraded = laterInvoices.some(inv => inv.total > invoice.total);
+    // Check 3: Did they upgrade? (Later invoice with meaningfully higher subtotal)
+    const upgradeDeltaThreshold = Math.max(
+      Math.round(invoice.subtotal * LEAKAGE_CONFIG.UPGRADE_THRESHOLD_PERCENT),
+      LEAKAGE_CONFIG.UPGRADE_THRESHOLD_CENTS
+    );
+    const upgraded = laterInvoicesSameSub.some(inv => (inv.subtotal - invoice.subtotal) >= upgradeDeltaThreshold);
     
-    // If ANY of these are true, the discount was likely unnecessary
-    const isLeaked = didRenew || paidFullPriceLater || upgraded;
+    // Only count as leakage with strong evidence of willingness to pay in strict mode
+    const isLeaked = strict ? (paidFullPriceLater || upgraded) : (didRenew || paidFullPriceLater || upgraded);
     
     if (!isLeaked) continue;
     
@@ -297,9 +316,9 @@ export async function analyzeDiscountLeakage(
       },
       
       laterInvoices: {
-        count: laterInvoices.length,
-        totalPaid: laterInvoices.reduce((sum, i) => sum + i.total, 0),
-        highestPaid: Math.max(...laterInvoices.map(i => i.total), 0),
+        count: laterInvoicesSameSub.length,
+        totalPaid: laterInvoicesSameSub.reduce((sum, i) => sum + i.total, 0),
+        highestPaid: Math.max(...laterInvoicesSameSub.map(i => i.total), 0),
         lastInvoiceDate,
       },
       
@@ -326,7 +345,8 @@ export async function analyzeDiscountLeakage(
     summary,
     couponLeakage,
     customerLeakage,
-    planLeakage
+    planLeakage,
+    strict
   );
 
   return {
@@ -622,7 +642,8 @@ async function generateAINarrative(
   summary: LeakageSummary,
   couponLeakage: CouponLeakage[],
   customerLeakage: CustomerLeakage[],
-  planLeakage: PlanLeakage[]
+  planLeakage: PlanLeakage[],
+  strict: boolean
 ): Promise<{ narrative: string | null; recommendations: AIRecommendation[] }> {
   const openai = getOpenAIClient();
   
@@ -639,8 +660,11 @@ async function generateAINarrative(
   const leakageAmount = Math.round(summary.totalLeakage / 100);
   
   // Build simple narrative without AI
-  let narrative = `Discounts are being applied to low churn-risk customers.\n`;
-  narrative += `Over the last ${summary.periodDays} days, you lost ~$${leakageAmount.toLocaleString()} discounting customers who renewed anyway.\n`;
+  const evidenceLabel = strict
+    ? 'later pay full price or upgrade'
+    : 'renew, pay full price, or upgrade';
+  let narrative = `Discounts are being applied where customers ${evidenceLabel}.\n`;
+  narrative += `Over the last ${summary.periodDays} days, you discounted away ~$${leakageAmount.toLocaleString()} on invoices that ${evidenceLabel}.\n`;
   
   if (recoveryLow > 0) {
     narrative += `Restricting discounts to first-time purchases would likely recover $${recoveryLow.toLocaleString()}–$${recoveryHigh.toLocaleString()} annually.`;
@@ -650,13 +674,13 @@ async function generateAINarrative(
   const recommendations: AIRecommendation[] = [];
   
   // Main recommendation: restrict discounts
-  if (summary.renewedWithoutNeedingDiscount > 0) {
+  if (summary.totalLeakedDiscounts > 0) {
     recommendations.push({
       priority: 100,
       title: 'Restrict discounts to first-time customers',
-      description: `${summary.renewedWithoutNeedingDiscount} customers renewed after receiving discounts. They would have paid full price.`,
+      description: `${summary.totalLeakedDiscounts} discounted invoices later paid full price or upgraded. Discounts weren’t necessary.`,
       expectedImpact: Math.round(summary.projectedAnnualLeakage * 0.7),
-      dataSupport: `${summary.leakageRate.toFixed(0)}% of discounts went to customers who didn't need them`,
+      dataSupport: `${summary.leakageRate.toFixed(0)}% of discounted invoices showed ${evidenceLabel}`,
     });
   }
   
@@ -679,7 +703,7 @@ async function generateAINarrative(
 
 DATA:
 - ${summary.totalDiscountedInvoices} discounted invoices
-- ${summary.renewedWithoutNeedingDiscount} customers renewed anyway  
+- ${summary.totalLeakedDiscounts} invoices that ${evidenceLabel}
 - $${leakageAmount.toLocaleString()} discounted away
 - Churn after discount: ${churnRate.toFixed(0)}%
 
@@ -688,8 +712,8 @@ Line 2: The cost (how much lost over ${summary.periodDays} days)
 Line 3: The fix (one action + expected recovery $${recoveryLow.toLocaleString()}–$${recoveryHigh.toLocaleString()}/yr)
 
 Example format:
-Discounts are being applied to low churn-risk customers.
-Over the last 90 days, you lost ~$19k discounting customers who renewed anyway.
+Discounts are being applied where customers later pay full price or upgrade.
+Over the last 90 days, you lost ~$19k discounting invoices that later paid full price.
 Restricting discounts to first-time purchases would likely recover $14k–$16k annually.`;
 
       const response = await openai.chat.completions.create({

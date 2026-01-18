@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Activity, Mail, Lock, ArrowRight, Loader2, User } from 'lucide-react';
@@ -13,7 +13,11 @@ export default function LoginPage() {
   const redirectTo = searchParams.get('redirect') || '/dashboard';
   
   const [isLoading, setIsLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
+  const isFreeReportFlow = useMemo(
+    () => (searchParams.get('redirect') || '').includes('flow=free-report'),
+    [searchParams]
+  );
+  const [isSignUp, setIsSignUp] = useState(isFreeReportFlow);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   
@@ -22,6 +26,12 @@ export default function LoginPage() {
   const [name, setName] = useState('');
 
   const supabase = createClient();
+
+  useEffect(() => {
+    if (isFreeReportFlow) {
+      setIsSignUp(true);
+    }
+  }, [isFreeReportFlow]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,7 +180,9 @@ export default function LoginPage() {
             </h2>
             <p className="text-muted-foreground">
               {isSignUp
-                ? 'Connect Stripe and get your first insights in minutes'
+                ? isFreeReportFlow
+                  ? 'Create your account to generate your free report'
+                  : 'Connect Stripe and get your first insights in minutes'
                 : 'Sign in to access your revenue dashboard'}
             </p>
           </div>

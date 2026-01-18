@@ -37,6 +37,8 @@ model Organization {
   syncLogs            SyncLog[]
   subscriptionEvents  SubscriptionEvent[]
   pricingExperiments  PricingExperiment[]
+  forecastCaches      ForecastCache[]
+  stripeWebhookEvents StripeWebhookEvent[]
 
   @@map("organizations")
 }
@@ -372,6 +374,28 @@ model DailyMetrics {
 }
 
 // ============================================================================
+// FORECAST CACHE
+// ============================================================================
+
+model ForecastCache {
+  id             String   @id @default(cuid())
+  cacheKey       String
+  daysAhead      Int
+  data           Json
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, cacheKey])
+  @@index([organizationId, expiresAt])
+  @@map("forecast_cache")
+}
+
+// ============================================================================
 // AI INSIGHTS & RECOMMENDATIONS
 // ============================================================================
 
@@ -629,6 +653,28 @@ model ExperimentAssignment {
   @@index([experimentId, variantId])
   @@index([customerId])
   @@map("experiment_assignments")
+}
+
+// ============================================================================
+// STRIPE WEBHOOK EVENTS (Idempotency)
+// ============================================================================
+
+model StripeWebhookEvent {
+  id              String   @id @default(cuid())
+  eventId         String   @unique
+  eventType       String
+  stripeAccountId String?
+  status          String   @default("processing") // processing | processed | ignored | failed
+  receivedAt      DateTime @default(now())
+  processedAt     DateTime?
+  errorMessage    String?  @db.Text
+
+  // Relations
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, receivedAt])
+  @@map("stripe_webhook_events")
 }
 
 // ============================================================================

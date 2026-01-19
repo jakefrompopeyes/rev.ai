@@ -25,8 +25,16 @@ const serverEnvSchema = z
     STRIPE_WEBHOOK_SECRET: z.string().optional(),
   })
   .superRefine((data, ctx) => {
+    // Skip production validation during build time
+    // During build, Next.js may set NODE_ENV=production but we shouldn't enforce
+    // production requirements until runtime. Check if we're in a build context.
+    const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build' || 
+                        process.env.NEXT_PHASE === 'phase-development-build' ||
+                        process.env.NEXT_PHASE === 'phase-export';
+    
+    // Only enforce production requirements at runtime, not during build
     const isProd = (data.NODE_ENV ?? 'development') === 'production';
-    if (!isProd) return;
+    if (!isProd || isBuildTime) return;
 
     if (!data.ADMIN_API_KEY) {
       ctx.addIssue({

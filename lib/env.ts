@@ -9,7 +9,7 @@ const serverEnvSchema = z
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'SUPABASE_SERVICE_ROLE_KEY is required'),
     APP_URL: z.string().min(1, 'APP_URL is required'),
     OPENAI_API_KEY: z.string().optional(),
-    PII_HASH_SECRET: z.string().min(8, 'PII_HASH_SECRET should be at least 8 characters'),
+    PII_HASH_SECRET: z.string().min(8, 'PII_HASH_SECRET should be at least 8 characters').optional(),
     ADMIN_API_KEY: z.string().optional(),
     FORECAST_CACHE_TTL_MS: z.string().optional(),
     STRIPE_MODE: z.string().optional(),

@@ -219,6 +219,7 @@ export async function analyzeDiscountLeakage(
       discountAmountOff: true,
       status: true,
       canceledAt: true,
+      endedAt: true,
     },
   });
 

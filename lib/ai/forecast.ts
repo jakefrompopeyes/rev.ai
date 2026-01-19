@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { OpenAI } from 'openai';
 import { subDays, addDays, format, differenceInDays } from 'date-fns';
 
@@ -104,11 +105,11 @@ async function setCachedForecast(
       organizationId,
       cacheKey,
       daysAhead,
-      data: result,
+      data: result as unknown as Prisma.InputJsonValue,
       expiresAt,
     },
     update: {
-      data: result,
+      data: result as unknown as Prisma.InputJsonValue,
       daysAhead,
       expiresAt,
     },

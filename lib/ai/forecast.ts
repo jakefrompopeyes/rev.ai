@@ -86,7 +86,7 @@ async function getCachedForecast(
     return null;
   }
 
-  return cached.data as ForecastResult;
+  return cached.data as unknown as ForecastResult;
 }
 
 async function setCachedForecast(

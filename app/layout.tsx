@@ -17,7 +17,7 @@ const jetBrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: 'discovred - Revenue Intelligence Platform',
-  description: 'AI-powered revenue intelligence for subscription businesses',
+  description: 'Revenue intelligence and pricing analytics for subscription businesses on Stripe',
 };
 
 export default function RootLayout({

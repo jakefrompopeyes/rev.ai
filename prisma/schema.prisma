@@ -39,6 +39,8 @@ model Organization {
   pricingExperiments  PricingExperiment[]
   forecastCaches      ForecastCache[]
   stripeWebhookEvents StripeWebhookEvent[]
+  customerSegments    CustomerSegment[]
+  segmentAssignments  SegmentCustomerAssignment[]
 
   @@map("organizations")
 }
@@ -189,6 +191,7 @@ model StripeCustomer {
   subscriptions  StripeSubscription[]
   invoices       StripeInvoice[]
   payments       StripePayment[]
+  segmentAssignments SegmentCustomerAssignment[]
 
   @@unique([organizationId, stripeId])
   @@index([organizationId])
@@ -704,6 +707,54 @@ model SyncLog {
 
   @@index([organizationId, startedAt])
   @@map("sync_logs")
+}
+
+// ============================================================================
+// CUSTOMER SEGMENTS
+// ============================================================================
+
+model CustomerSegment {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?  @db.Text
+  color           String?  // Hex color for UI
+  
+  // Segment rules (JSON structure for flexible querying)
+  // Example: { "mrr": { "min": 10000, "max": 50000 }, "planInterval": "month", "tenureDays": { "min": 90 } }
+  rules           Json
+  
+  // Metadata
+  isSystem        Boolean  @default(false) // System segments can't be deleted
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customers       SegmentCustomerAssignment[]
+  
+  @@index([organizationId])
+  @@map("customer_segments")
+}
+
+model SegmentCustomerAssignment {
+  id              String   @id @default(cuid())
+  
+  // Relations
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  segmentId       String
+  segment         CustomerSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        StripeCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  // When this assignment was made
+  assignedAt      DateTime @default(now())
+  
+  @@unique([segmentId, customerId])
+  @@index([organizationId, segmentId])
+  @@index([customerId])
+  @@map("segment_customer_assignments")
 }
 
 

@@ -41,6 +41,8 @@ import { AnnualPlanOpportunity } from '@/components/dashboard/annual-plan-opport
 import { ComparisonToggle } from '@/components/dashboard/comparison-toggle';
 import { KeyboardShortcutsHelp } from '@/components/dashboard/keyboard-shortcuts-help';
 import { SettingsPanel } from '@/components/dashboard/settings-panel';
+import { PlanMigrationPaths } from '@/components/dashboard/plan-migration-paths';
+import { CustomerSegmentation } from '@/components/dashboard/customer-segmentation';
 import { useKeyboardShortcuts } from '@/lib/hooks/use-keyboard-shortcuts';
 import { formatCurrency, formatPercentAbs } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -354,7 +356,24 @@ export default function DashboardPage() {
     }
     
     if (error) {
-      console.error('Stripe connection error:', error);
+      const decodedError = decodeURIComponent(error);
+      console.error('Stripe connection error:', decodedError);
+      
+      // Show user-friendly error message
+      let errorMessage = decodedError;
+      let helpText = '';
+      
+      if (decodedError.includes('Invalid redirect URI')) {
+        errorMessage = 'Redirect URI not configured in Stripe';
+        helpText = `\n\nTo fix this:\n1. Go to https://dashboard.stripe.com/test/settings/applications\n2. Find your Connect app\n3. Add this exact redirect URI:\n   http://localhost:3000/api/stripe/callback\n4. Save and try again\n\nOr use the "Use API Key instead" option below to skip OAuth setup.`;
+      } else if (decodedError.includes('Invalid request')) {
+        errorMessage = 'Stripe configuration error';
+        helpText = `\n\nError details: ${decodedError}\n\nPlease check your Stripe Connect app settings.`;
+      }
+      
+      alert(`Stripe Connection Error: ${errorMessage}${helpText}`);
+      
+      // Clear the URL param
       const params = new URLSearchParams(searchParams.toString());
       params.delete('connected');
       params.delete('error');
@@ -401,6 +420,13 @@ export default function DashboardPage() {
       const res = await fetch('/api/stripe/connect');
       const data = await res.json();
       
+      if (!res.ok) {
+        const errorMessage = data.error || 'Failed to initiate Stripe connection';
+        console.error('Stripe connection error:', errorMessage);
+        alert(`Error: ${errorMessage}\n\nPlease check:\n1. STRIPE_CLIENT_ID or STRIPE_CLIENT_ID_TEST is set in your environment variables\n2. Your Stripe Connect app is configured correctly`);
+        return;
+      }
+      
       // Store whether direct connect is supported (for showing API key option)
       if (data.supportsDirectConnect !== undefined) {
         setStripeStatus(prev => ({ ...prev, supportsDirectConnect: data.supportsDirectConnect }));
@@ -408,9 +434,14 @@ export default function DashboardPage() {
       
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        console.error('No OAuth URL returned from API');
+        alert('Error: No OAuth URL received. Please check that STRIPE_CLIENT_ID or STRIPE_CLIENT_ID_TEST is configured in your environment variables.');
       }
     } catch (error) {
       console.error('Failed to initiate connection:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Connection failed: ${errorMessage}`);
     } finally {
       setIsConnecting(false);
     }
@@ -961,6 +992,10 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <CohortHeatmap data={cohortData} isLoading={isLoadingCohorts} />
+                    
+                    <section>
+                      <CustomerSegmentation />
+                    </section>
                   </TabsContent>
 
                   <TabsContent value="pricing" className="space-y-10">
@@ -977,6 +1012,10 @@ export default function DashboardPage() {
                         totalMrr={current?.mrr}
                         isLoading={isLoadingMetrics}
                       />
+                    </section>
+
+                    <section>
+                      <PlanMigrationPaths />
                     </section>
                   </TabsContent>
 

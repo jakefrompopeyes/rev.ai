@@ -7,9 +7,21 @@ export const runtime = 'nodejs';
 export async function GET() {
   try {
     const { requireAuthWithOrg } = await import('@/lib/supabase/auth-helpers');
-    const { getStripeOAuthUrl, isTestMode } = await import('@/lib/stripe/client');
+    const { getStripeOAuthUrl, isTestMode, STRIPE_OAUTH_CONFIG } = await import('@/lib/stripe/client');
     
     const { organizationId } = await requireAuthWithOrg();
+
+    // Check if Stripe Client ID is configured
+    const clientId = STRIPE_OAUTH_CONFIG.clientId;
+    if (!clientId) {
+      const mode = isTestMode() ? 'test' : 'live';
+      return NextResponse.json(
+        { 
+          error: `Stripe Client ID is not configured. Please set STRIPE_CLIENT_ID_${mode.toUpperCase()} or STRIPE_CLIENT_ID in your environment variables. You can get your Client ID from https://dashboard.stripe.com/settings/connect` 
+        },
+        { status: 500 }
+      );
+    }
 
     // Generate a secure state token
     const state = crypto.randomBytes(32).toString('hex');
@@ -23,6 +35,16 @@ export async function GET() {
 
     const authUrl = getStripeOAuthUrl(stateData);
 
+    // Validate that the URL was generated correctly
+    if (!authUrl || !authUrl.includes('client_id=')) {
+      return NextResponse.json(
+        { 
+          error: 'Failed to generate OAuth URL. Please check your Stripe Client ID configuration.' 
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({ 
       url: authUrl,
       testMode: isTestMode(),
@@ -34,7 +56,7 @@ export async function GET() {
     }
     console.error('Stripe connect error:', error);
     return NextResponse.json(
-      { error: 'Failed to initiate Stripe connection' },
+      { error: error instanceof Error ? error.message : 'Failed to initiate Stripe connection' },
       { status: 500 }
     );
   }

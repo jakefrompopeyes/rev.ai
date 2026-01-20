@@ -14,8 +14,21 @@ export async function GET(request: NextRequest) {
     // Handle errors from Stripe
     if (error) {
       console.error('Stripe OAuth error:', error, errorDescription);
+      
+      // Provide helpful error message for redirect URI issues
+      let errorMessage = errorDescription || error;
+      if (errorDescription?.includes('Invalid redirect URI') || errorDescription?.includes('redirect_uri')) {
+        const { isTestMode, getAppUrl } = await import('@/lib/stripe/client');
+        const appUrl = getAppUrl();
+        const redirectUri = `${appUrl}/api/stripe/callback`;
+        const testMode = isTestMode();
+        const settingsUrl = `https://dashboard.stripe.com/${testMode ? 'test/' : ''}settings/applications`;
+        
+        errorMessage = `Redirect URI not registered in Stripe. Add this exact URI to your Connect app settings:\n\n${redirectUri}\n\nGo to: ${settingsUrl}`;
+      }
+      
       return NextResponse.redirect(
-        new URL(`/dashboard?error=${encodeURIComponent(errorDescription || error)}`, process.env.APP_URL)
+        new URL(`/dashboard?error=${encodeURIComponent(errorMessage)}`, process.env.APP_URL)
       );
     }
 

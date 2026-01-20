@@ -59,15 +59,24 @@ export async function GET() {
       );
     }
 
+    const { getAppUrl } = await import('@/lib/stripe/client');
+    const appUrl = getAppUrl();
+    const redirectUri = `${appUrl}/api/stripe/callback`;
+    const settingsUrl = testMode 
+      ? 'https://dashboard.stripe.com/test/settings/applications'
+      : 'https://dashboard.stripe.com/settings/applications';
+    
     return NextResponse.json({ 
       url: authUrl,
       testMode,
       supportsDirectConnect: testMode, // Can use direct API key connection in test mode
       clientIdPrefix: clientId.substring(0, 10), // First 10 chars for debugging (safe to expose)
       mode: testMode ? 'test' : 'live',
+      redirectUri, // Include redirect URI in response for debugging
+      settingsUrl, // Include settings URL for easy access
       note: testMode 
-        ? 'Using test mode - you should see test/sandbox Stripe accounts in the OAuth flow. If you see live accounts, ensure STRIPE_CLIENT_ID_TEST is set correctly.'
-        : 'Using live mode - you will see live Stripe accounts in the OAuth flow.',
+        ? `Using test mode - you should see test/sandbox Stripe accounts in the OAuth flow. If you see live accounts, ensure STRIPE_CLIENT_ID_TEST is set correctly.\n\nIMPORTANT: Make sure this redirect URI is registered in your Stripe Connect app:\n${redirectUri}\n\nSettings: ${settingsUrl}`
+        : `Using live mode - you will see live Stripe accounts in the OAuth flow.\n\nIMPORTANT: Make sure this redirect URI is registered in your Stripe Connect app:\n${redirectUri}\n\nSettings: ${settingsUrl}`,
     });
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {

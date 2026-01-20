@@ -107,7 +107,7 @@ export const STRIPE_OAUTH_CONFIG = {
 };
 
 // Get the app URL (works on Vercel and locally)
-function getAppUrl(): string {
+export function getAppUrl(): string {
   const raw =
     process.env.APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
@@ -119,18 +119,24 @@ function getAppUrl(): string {
 export function getStripeOAuthUrl(state: string): string {
   const clientId = STRIPE_OAUTH_CONFIG.clientId;
   const testMode = isTestMode();
+  const appUrl = getAppUrl();
+  const redirectUri = `${appUrl}/api/stripe/callback`;
   
   // Validate client ID matches the mode
   if (testMode && clientId && !clientId.startsWith('ca_test_') && process.env.STRIPE_CLIENT_ID_TEST) {
     console.warn('Warning: Test mode is enabled but client ID does not appear to be a test client ID. Ensure STRIPE_CLIENT_ID_TEST is set correctly.');
   }
   
+  // Log the redirect URI for debugging
+  console.log(`[Stripe Connect] Using redirect URI: ${redirectUri}`);
+  console.log(`[Stripe Connect] Make sure this exact URI is registered in your Stripe Connect app settings at: https://dashboard.stripe.com/${testMode ? 'test/' : ''}settings/applications`);
+  
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
     scope: STRIPE_OAUTH_CONFIG.scope,
     state,
-    redirect_uri: `${getAppUrl()}/api/stripe/callback`,
+    redirect_uri: redirectUri,
   });
 
   // Note: Stripe automatically uses test mode when you use a test client ID (ca_test_*)

@@ -41,7 +41,12 @@ export function isTestMode(): boolean {
 // Get the appropriate Client ID based on mode
 function getClientId(): string {
   if (isTestMode()) {
-    return process.env.STRIPE_CLIENT_ID_TEST || process.env.STRIPE_CLIENT_ID || '';
+    const testClientId = process.env.STRIPE_CLIENT_ID_TEST || process.env.STRIPE_CLIENT_ID || '';
+    // Warn if using a client ID that looks like it might be live
+    if (testClientId && !testClientId.includes('test') && !testClientId.startsWith('ca_')) {
+      console.warn('Warning: Using STRIPE_CLIENT_ID in test mode. Make sure you have STRIPE_CLIENT_ID_TEST set for test mode OAuth.');
+    }
+    return testClientId;
   }
   return process.env.STRIPE_CLIENT_ID_LIVE || process.env.STRIPE_CLIENT_ID || '';
 }
@@ -112,15 +117,31 @@ function getAppUrl(): string {
 
 // Generate OAuth authorization URL
 export function getStripeOAuthUrl(state: string): string {
+  const clientId = STRIPE_OAUTH_CONFIG.clientId;
+  const testMode = isTestMode();
+  
+  // Validate client ID matches the mode
+  if (testMode && clientId && !clientId.startsWith('ca_test_') && process.env.STRIPE_CLIENT_ID_TEST) {
+    console.warn('Warning: Test mode is enabled but client ID does not appear to be a test client ID. Ensure STRIPE_CLIENT_ID_TEST is set correctly.');
+  }
+  
   const params = new URLSearchParams({
     response_type: 'code',
-    client_id: STRIPE_OAUTH_CONFIG.clientId,
+    client_id: clientId,
     scope: STRIPE_OAUTH_CONFIG.scope,
     state,
     redirect_uri: `${getAppUrl()}/api/stripe/callback`,
   });
 
-  return `${STRIPE_OAUTH_CONFIG.authorizeUrl}?${params.toString()}`;
+  // Note: Stripe automatically uses test mode when you use a test client ID (ca_test_*)
+  // The OAuth URL is the same for both test and live, Stripe determines mode from client_id
+  const url = `${STRIPE_OAUTH_CONFIG.authorizeUrl}?${params.toString()}`;
+  
+  if (testMode) {
+    console.log(`[Stripe Connect] Generating OAuth URL in TEST mode with client ID: ${clientId.substring(0, 10)}...`);
+  }
+  
+  return url;
 }
 
 // Exchange authorization code for access token

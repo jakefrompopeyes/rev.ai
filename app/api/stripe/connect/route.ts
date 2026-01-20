@@ -13,14 +13,28 @@ export async function GET() {
 
     // Check if Stripe Client ID is configured
     const clientId = STRIPE_OAUTH_CONFIG.clientId;
+    const testMode = isTestMode();
+    
     if (!clientId) {
-      const mode = isTestMode() ? 'test' : 'live';
+      const mode = testMode ? 'test' : 'live';
+      const dashboardUrl = testMode 
+        ? 'https://dashboard.stripe.com/test/settings/connect'
+        : 'https://dashboard.stripe.com/settings/connect';
       return NextResponse.json(
         { 
-          error: `Stripe Client ID is not configured. Please set STRIPE_CLIENT_ID_${mode.toUpperCase()} or STRIPE_CLIENT_ID in your environment variables. You can get your Client ID from https://dashboard.stripe.com/settings/connect` 
+          error: `Stripe Client ID is not configured. Please set STRIPE_CLIENT_ID_${mode.toUpperCase()} or STRIPE_CLIENT_ID in your environment variables. You can get your Client ID from ${dashboardUrl}` 
         },
         { status: 500 }
       );
+    }
+    
+    // Validate client ID matches the mode
+    if (testMode && !clientId.startsWith('ca_test_')) {
+      console.warn(`[Stripe Connect] Test mode is enabled but client ID "${clientId.substring(0, 15)}..." does not appear to be a test client ID (should start with "ca_test_"). This may cause OAuth to show live accounts instead of test accounts.`);
+    }
+    
+    if (!testMode && clientId.startsWith('ca_test_')) {
+      console.warn(`[Stripe Connect] Live mode is enabled but client ID appears to be a test client ID. This may cause OAuth to show test accounts instead of live accounts.`);
     }
 
     // Generate a secure state token
@@ -47,8 +61,13 @@ export async function GET() {
 
     return NextResponse.json({ 
       url: authUrl,
-      testMode: isTestMode(),
-      supportsDirectConnect: isTestMode(), // Can use direct API key connection in test mode
+      testMode,
+      supportsDirectConnect: testMode, // Can use direct API key connection in test mode
+      clientIdPrefix: clientId.substring(0, 10), // First 10 chars for debugging (safe to expose)
+      mode: testMode ? 'test' : 'live',
+      note: testMode 
+        ? 'Using test mode - you should see test/sandbox Stripe accounts in the OAuth flow. If you see live accounts, ensure STRIPE_CLIENT_ID_TEST is set correctly.'
+        : 'Using live mode - you will see live Stripe accounts in the OAuth flow.',
     });
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {

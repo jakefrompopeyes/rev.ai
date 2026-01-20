@@ -413,6 +413,37 @@ export default function DashboardPage() {
     }
   }, [user, fetchStripeStatus, fetchMetrics, fetchMetricsHistory, fetchWaterfallData, fetchActivities, fetchCohortData, fetchAtRiskCustomers, fetchInsights, fetchRecommendations]);
 
+  // Auto-refresh data every 30 seconds (if connected to Stripe)
+  useEffect(() => {
+    if (!stripeStatus.connected) return;
+
+    const interval = setInterval(() => {
+      // Only refresh metrics and status (lightweight refresh)
+      fetchStripeStatus();
+      fetchMetrics();
+      fetchActivities();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [stripeStatus.connected, fetchStripeStatus, fetchMetrics, fetchActivities]);
+
+  // Refresh when page becomes visible (user switches back to tab)
+  useEffect(() => {
+    if (!stripeStatus.connected) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Refresh when user comes back to the tab
+        fetchStripeStatus();
+        fetchMetrics();
+        fetchActivities();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [stripeStatus.connected, fetchStripeStatus, fetchMetrics, fetchActivities]);
+
   // Actions
   const handleConnect = async () => {
     setIsConnecting(true);

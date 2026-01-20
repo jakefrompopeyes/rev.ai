@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import { getSecretKey } from '@/lib/stripe/client';
+import { getSecretKey, isTestMode } from '@/lib/stripe/client';
 
 const stripe = new Stripe(getSecretKey(), { apiVersion: '2023-10-16' });
 
@@ -11,28 +11,58 @@ const stripe = new Stripe(getSecretKey(), { apiVersion: '2023-10-16' });
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-  const body = await request.text();
-  const headersList = await headers();
-  const signature = headersList.get('stripe-signature');
-
-  if (!signature) {
-    return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
-  }
-
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    console.error('STRIPE_WEBHOOK_SECRET not configured');
-    return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
-  }
-
-  let event: Stripe.Event;
-
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-  } catch (err: any) {
-    console.error('Webhook signature verification failed:', err.message);
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
-  }
+    const body = await request.text();
+    const headersList = await headers();
+    const signature = headersList.get('stripe-signature');
+
+    if (!signature) {
+      console.error('❌ Webhook missing signature header');
+      // Return 400 - this is a bad request, Stripe shouldn't retry
+      return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
+    }
+
+    // Get webhook secret - support both mode-specific and single secret
+    // Priority: STRIPE_WEBHOOK_SECRET_TEST/LIVE > STRIPE_WEBHOOK_SECRET
+    const testMode = isTestMode();
+    let webhookSecret: string | undefined;
+    
+    if (testMode) {
+      webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_TEST || process.env.STRIPE_WEBHOOK_SECRET;
+    } else {
+      webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET;
+    }
+    
+    if (!webhookSecret) {
+      const mode = testMode ? 'test' : 'live';
+      console.error(`❌ STRIPE_WEBHOOK_SECRET${testMode ? '_TEST' : '_LIVE'} or STRIPE_WEBHOOK_SECRET not configured`);
+      console.error(`   Set STRIPE_WEBHOOK_SECRET_${mode.toUpperCase()} or STRIPE_WEBHOOK_SECRET in your environment variables`);
+      // Return 500 - this is a server configuration issue
+      return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
+    }
+
+    // Log webhook secret prefix for debugging (first 10 chars, safe to log)
+    const secretSource = testMode 
+      ? (process.env.STRIPE_WEBHOOK_SECRET_TEST ? 'STRIPE_WEBHOOK_SECRET_TEST' : 'STRIPE_WEBHOOK_SECRET')
+      : (process.env.STRIPE_WEBHOOK_SECRET_LIVE ? 'STRIPE_WEBHOOK_SECRET_LIVE' : 'STRIPE_WEBHOOK_SECRET');
+    console.log(`🔐 Using webhook secret from ${secretSource}: ${webhookSecret.substring(0, 10)}... (${testMode ? 'test' : 'live'} mode)`);
+
+    let event: Stripe.Event;
+
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    } catch (err: any) {
+      console.error('❌ Webhook signature verification failed:', err.message);
+      console.error(`   Secret being used: ${webhookSecret.substring(0, 10)}...`);
+      console.error('   Common issues:');
+      console.error('   1. Wrong secret - Make sure you\'re using the correct secret:');
+      console.error('      - Local dev with Stripe CLI: Use secret from "stripe listen" output');
+      console.error('      - Stripe Dashboard: Use secret from Dashboard → Webhooks → Your endpoint → Signing secret');
+      console.error('   2. Test vs Live mismatch - Make sure test webhook uses test secret, live uses live secret');
+      console.error('   3. Secret not updated - Restart server after changing STRIPE_WEBHOOK_SECRET');
+      // Return 400 - invalid signature, Stripe shouldn't retry
+      return NextResponse.json({ error: 'Invalid signature', details: err.message }, { status: 400 });
+    }
 
   console.log(`📨 Received Stripe webhook: ${event.type}`);
 
@@ -162,18 +192,40 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    console.error('❌ Error processing webhook:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
     if (webhookRecordId) {
-      await prisma.stripeWebhookEvent.update({
-        where: { id: webhookRecordId },
-        data: {
-          status: 'failed',
-          processedAt: new Date(),
-          errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        },
-      });
+      try {
+        await prisma.stripeWebhookEvent.update({
+          where: { id: webhookRecordId },
+          data: {
+            status: 'failed',
+            processedAt: new Date(),
+            errorMessage: errorMessage,
+          },
+        });
+      } catch (dbError) {
+        console.error('Failed to update webhook event record:', dbError);
+      }
     }
-    return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
+    
+    // Always return 200 to acknowledge receipt, even on processing errors
+    // This prevents Stripe from retrying forever. We log the error for debugging.
+    console.error('   Error details:', errorMessage);
+    if (errorStack) {
+      console.error('   Stack:', errorStack);
+    }
+    
+    return NextResponse.json({ received: true, error: 'Processing failed', details: errorMessage }, { status: 200 });
+  }
+  } catch (outerError) {
+    // Catch any errors outside the main try block (e.g., reading body, headers)
+    console.error('❌ Fatal webhook error:', outerError);
+    const errorMessage = outerError instanceof Error ? outerError.message : 'Unknown error';
+    // Return 200 to prevent retries
+    return NextResponse.json({ received: true, error: 'Fatal error', details: errorMessage }, { status: 200 });
   }
 }
 

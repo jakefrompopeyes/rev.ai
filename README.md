@@ -81,7 +81,6 @@ discovred connects to your Stripe account via secure OAuth (read-only) and provi
     STRIPE_WEBHOOK_SECRET="whsec_xxx"
    OPENAI_API_KEY="sk-xxx"
     PII_HASH_SECRET="replace-with-random-32-bytes"
-    ADMIN_API_KEY="set-a-random-admin-key"
    APP_URL="http://localhost:3000"
    ```
    For the full list (including Stripe price IDs), see `env.template`.

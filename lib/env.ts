@@ -36,14 +36,6 @@ const serverEnvSchema = z
     const isProd = (data.NODE_ENV ?? 'development') === 'production';
     if (!isProd || isBuildTime) return;
 
-    if (!data.ADMIN_API_KEY) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['ADMIN_API_KEY'],
-        message: 'ADMIN_API_KEY is required in production',
-      });
-    }
-
     if (!data.STRIPE_WEBHOOK_SECRET) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

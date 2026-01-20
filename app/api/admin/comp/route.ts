@@ -3,24 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function unauthorized() {
-  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-}
-
 export async function POST(request: NextRequest) {
-  const adminKey = process.env.ADMIN_API_KEY;
-  if (!adminKey) {
-    return NextResponse.json(
-      { error: 'ADMIN_API_KEY not configured' },
-      { status: 500 }
-    );
-  }
-
-  const provided = request.headers.get('x-admin-key');
-  if (!provided || provided !== adminKey) {
-    return unauthorized();
-  }
-
   const { prisma } = await import('@/lib/db');
   const body = await request.json().catch(() => ({}));
 

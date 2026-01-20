@@ -31,8 +31,12 @@ export function AnimatedBackground() {
       color: string;
       baseOpacity: number;
       time: number;
+      canvas: HTMLCanvasElement;
+      ctx: CanvasRenderingContext2D;
 
-      constructor() {
+      constructor(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+        this.canvas = canvas;
+        this.ctx = ctx;
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
         this.vx = (Math.random() - 0.5) * 0.8;
@@ -62,28 +66,27 @@ export function AnimatedBackground() {
         this.opacity = this.baseOpacity + Math.sin(this.time) * 0.2;
 
         // Bounce off edges
-        if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
-        if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+        if (this.x < 0 || this.x > this.canvas.width) this.vx *= -1;
+        if (this.y < 0 || this.y > this.canvas.height) this.vy *= -1;
         
         // Keep particles in bounds
-        this.x = Math.max(0, Math.min(canvas.width, this.x));
-        this.y = Math.max(0, Math.min(canvas.height, this.y));
+        this.x = Math.max(0, Math.min(this.canvas.width, this.x));
+        this.y = Math.max(0, Math.min(this.canvas.height, this.y));
       }
 
       draw() {
-        if (!ctx) return;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.color;
-        ctx.globalAlpha = this.opacity;
-        ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        this.ctx.fillStyle = this.color;
+        this.ctx.globalAlpha = this.opacity;
+        this.ctx.fill();
         
         // Add glow effect
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = this.color;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.globalAlpha = 1;
+        this.ctx.shadowBlur = 10;
+        this.ctx.shadowColor = this.color;
+        this.ctx.fill();
+        this.ctx.shadowBlur = 0;
+        this.ctx.globalAlpha = 1;
       }
     }
 
@@ -92,14 +95,13 @@ export function AnimatedBackground() {
     const particleCount = Math.floor((canvas.width * canvas.height) / 12000);
     
     for (let i = 0; i < particleCount; i++) {
-      particles.push(new Particle());
+      particles.push(new Particle(canvas, ctx));
     }
 
     // Connection lines
     const maxDistance = 180;
 
     const drawConnections = () => {
-      if (!ctx) return;
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
           const dx = particles[i].x - particles[j].x;
@@ -127,7 +129,6 @@ export function AnimatedBackground() {
 
     // Animation loop
     const animate = () => {
-      if (!ctx) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       particles.forEach(particle => {

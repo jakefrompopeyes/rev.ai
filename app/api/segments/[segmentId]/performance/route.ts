@@ -24,8 +24,12 @@ export async function GET(
       include: {
         customers: {
           include: {
-            subscriptions: {
-              where: { status: { in: ['active', 'trialing'] } },
+            customer: {
+              include: {
+                subscriptions: {
+                  where: { status: { in: ['active', 'trialing'] } },
+                },
+              },
             },
           },
         },
@@ -46,8 +50,8 @@ export async function GET(
     let churnRiskCount = 0;
     let delinquentCount = 0;
 
-    for (const customer of customers) {
-      const activeSub = customer.subscriptions[0];
+    for (const assignment of customers) {
+      const activeSub = assignment.customer.subscriptions[0];
       if (activeSub) {
         totalMrr += activeSub.mrr;
         totalArr += activeSub.arr;
@@ -58,7 +62,7 @@ export async function GET(
         if (activeSub.cancelAtPeriodEnd) churnRiskCount++;
       }
       
-      if (customer.delinquent) delinquentCount++;
+      if (assignment.customer.delinquent) delinquentCount++;
     }
 
     const avgMrr = totalCustomers > 0 ? Math.round(totalMrr / totalCustomers) : 0;
@@ -73,7 +77,7 @@ export async function GET(
     const churnedCustomers = await prisma.stripeCustomer.findMany({
       where: {
         organizationId,
-        id: { in: customers.map(c => c.id) },
+        id: { in: customers.map(c => c.customer.id) },
         subscriptions: {
           some: {
             canceledAt: { gte: thirtyDaysAgo },

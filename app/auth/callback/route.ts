@@ -27,9 +27,13 @@ export async function GET(request: Request) {
                           data.user.user_metadata?.name || 
                           data.user.email.split('@')[0];
         
+        const { isFreeMode } = await import('@/lib/env');
         await prisma.organization.create({
           data: {
             name: `${companyName}'s Organization`,
+            isComped: isFreeMode(),
+            compedTier: isFreeMode() ? 'SCALE' : null,
+            compedReason: isFreeMode() ? 'Free mode enabled' : null,
             users: {
               create: {
                 email: data.user.email,

@@ -15,9 +15,13 @@ async function getDevOrganizationId(): Promise<string> {
   }
   
   // Create a new organization for development
+  const { isFreeMode } = await import('@/lib/env');
   const newOrg = await prisma.organization.create({
     data: {
       name: 'Development Organization',
+      isComped: isFreeMode(),
+      compedTier: isFreeMode() ? 'SCALE' : null,
+      compedReason: isFreeMode() ? 'Free mode enabled' : null,
       users: {
         create: {
           email: 'dev@localhost',
@@ -85,9 +89,13 @@ export async function requireAuthWithOrg(): Promise<{
                       user.user_metadata?.name || 
                       user.email.split('@')[0];
     
+    const { isFreeMode } = await import('@/lib/env');
     const org = await prisma.organization.create({
       data: {
         name: `${companyName}'s Organization`,
+        isComped: isFreeMode(),
+        compedTier: isFreeMode() ? 'SCALE' : null,
+        compedReason: isFreeMode() ? 'Free mode enabled' : null,
         users: {
           create: {
             email: user.email,

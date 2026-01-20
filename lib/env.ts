@@ -11,6 +11,7 @@ const serverEnvSchema = z
     OPENAI_API_KEY: z.string().optional(),
     PII_HASH_SECRET: z.string().min(8, 'PII_HASH_SECRET should be at least 8 characters').optional(),
     ADMIN_API_KEY: z.string().optional(),
+    FREE_MODE: z.string().optional(), // Set to "true" to disable billing and give free access
     FORECAST_CACHE_TTL_MS: z.string().optional(),
     STRIPE_MODE: z.string().optional(),
     STRIPE_CLIENT_ID: z.string().optional(),
@@ -36,13 +37,8 @@ const serverEnvSchema = z
     const isProd = (data.NODE_ENV ?? 'development') === 'production';
     if (!isProd || isBuildTime) return;
 
-    if (!data.STRIPE_WEBHOOK_SECRET) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['STRIPE_WEBHOOK_SECRET'],
-        message: 'STRIPE_WEBHOOK_SECRET is required in production',
-      });
-    }
+    // Note: STRIPE_WEBHOOK_SECRET is optional - only needed if using webhooks
+    // It's not required for basic Stripe Connect functionality
 
     if (!data.STRIPE_SECRET_KEY_LIVE && !data.STRIPE_SECRET_KEY) {
       ctx.addIssue({
@@ -86,5 +82,12 @@ export function getServerEnv() {
 
 export function assertServerEnv() {
   getServerEnv();
+}
+
+/**
+ * Check if free mode is enabled (disables billing and gives free access)
+ */
+export function isFreeMode(): boolean {
+  return process.env.FREE_MODE === 'true' || process.env.FREE_MODE === '1';
 }
 

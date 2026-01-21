@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import {
-  Activity,
   ArrowRight,
   Check,
   Sparkles,
@@ -114,8 +114,13 @@ export default function PricingPage() {
         <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-3">
-              <div className="rounded-xl bg-primary p-2.5">
-                <Activity className="h-5 w-5 text-primary-foreground" />
+              <div className="relative h-9 w-9">
+                <Image
+                  src="/logo.png"
+                  alt="discovred logo"
+                  fill
+                  className="object-contain"
+                />
               </div>
               <span className="text-xl font-bold tracking-tight">discovred</span>
             </Link>
@@ -424,7 +429,14 @@ export default function PricingPage() {
       <footer className="border-t border-border py-8 px-6">
         <div className="max-w-6xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4" />
+            <div className="relative h-4 w-4">
+              <Image
+                src="/logo.png"
+                alt="discovred logo"
+                fill
+                className="object-contain"
+              />
+            </div>
             <span>discovred</span>
           </div>
           <div>© 2024 discovred. Built for B2B SaaS on Stripe Billing.</div>

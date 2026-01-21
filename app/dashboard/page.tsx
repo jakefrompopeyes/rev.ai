@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,7 +13,6 @@ import {
   Percent,
   AlertTriangle,
   CreditCard,
-  Activity as ActivityIcon,
   X,
   Target,
 } from 'lucide-react';
@@ -702,8 +702,13 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary p-2">
-                <ActivityIcon className="h-5 w-5 text-primary-foreground" />
+              <div className="relative h-9 w-9">
+                <Image
+                  src="/logo.png"
+                  alt="discovred logo"
+                  fill
+                  className="object-contain"
+                />
               </div>
               <div>
                 <h1 className="text-xl font-bold tracking-tight">discovred</h1>

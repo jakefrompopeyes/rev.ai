@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Activity, Mail, Lock, ArrowRight, Loader2, User } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader2, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 
@@ -116,8 +117,13 @@ export default function LoginPage() {
         <div className="absolute inset-0 grid-bg opacity-10" />
         <div className="relative z-10 flex flex-col justify-between p-12 text-white">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-white/20 p-3 backdrop-blur-sm">
-              <Activity className="h-7 w-7" />
+            <div className="relative h-10 w-10">
+              <Image
+                src="/logo.png"
+                alt="discovred logo"
+                fill
+                className="object-contain"
+              />
             </div>
             <span className="text-2xl font-bold tracking-tight">discovred</span>
           </div>
@@ -168,8 +174,13 @@ export default function LoginPage() {
         >
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div className="rounded-xl bg-primary p-3">
-              <Activity className="h-6 w-6 text-primary-foreground" />
+            <div className="relative h-10 w-10">
+              <Image
+                src="/logo.png"
+                alt="discovred logo"
+                fill
+                className="object-contain"
+              />
             </div>
             <span className="text-2xl font-bold tracking-tight">discovred</span>
           </div>

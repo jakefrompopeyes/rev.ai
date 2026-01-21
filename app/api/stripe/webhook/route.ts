@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
     }
 
-    // Get webhook secret - support both mode-specific and single secret
+    // Get webhook secret - support mode-specific or single secret
     // Priority: STRIPE_WEBHOOK_SECRET_TEST/LIVE > STRIPE_WEBHOOK_SECRET
     const testMode = isTestMode();
     let webhookSecret: string | undefined;
@@ -37,11 +37,12 @@ export async function POST(request: Request) {
       const mode = testMode ? 'test' : 'live';
       console.error(`❌ STRIPE_WEBHOOK_SECRET${testMode ? '_TEST' : '_LIVE'} or STRIPE_WEBHOOK_SECRET not configured`);
       console.error(`   Set STRIPE_WEBHOOK_SECRET_${mode.toUpperCase()} or STRIPE_WEBHOOK_SECRET in your environment variables`);
+      console.error(`   Get the secret from Stripe Dashboard → Webhooks → Your endpoint → Signing secret`);
       // Return 500 - this is a server configuration issue
       return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
     }
 
-    // Log webhook secret prefix for debugging (first 10 chars, safe to log)
+    // Log which secret is being used
     const secretSource = testMode 
       ? (process.env.STRIPE_WEBHOOK_SECRET_TEST ? 'STRIPE_WEBHOOK_SECRET_TEST' : 'STRIPE_WEBHOOK_SECRET')
       : (process.env.STRIPE_WEBHOOK_SECRET_LIVE ? 'STRIPE_WEBHOOK_SECRET_LIVE' : 'STRIPE_WEBHOOK_SECRET');
@@ -54,12 +55,11 @@ export async function POST(request: Request) {
     } catch (err: any) {
       console.error('❌ Webhook signature verification failed:', err.message);
       console.error(`   Secret being used: ${webhookSecret.substring(0, 10)}...`);
-      console.error('   Common issues:');
-      console.error('   1. Wrong secret - Make sure you\'re using the correct secret:');
-      console.error('      - Local dev with Stripe CLI: Use secret from "stripe listen" output');
-      console.error('      - Stripe Dashboard: Use secret from Dashboard → Webhooks → Your endpoint → Signing secret');
-      console.error('   2. Test vs Live mismatch - Make sure test webhook uses test secret, live uses live secret');
-      console.error('   3. Secret not updated - Restart server after changing STRIPE_WEBHOOK_SECRET');
+      console.error('   Make sure STRIPE_WEBHOOK_SECRET matches the secret from:');
+      console.error('   Stripe Dashboard → Webhooks → Your endpoint → Signing secret');
+      console.error('   - For test mode: Use secret from test webhook endpoint');
+      console.error('   - For live mode: Use secret from live webhook endpoint');
+      console.error('   - Restart server after changing STRIPE_WEBHOOK_SECRET');
       // Return 400 - invalid signature, Stripe shouldn't retry
       return NextResponse.json({ error: 'Invalid signature', details: err.message }, { status: 400 });
     }

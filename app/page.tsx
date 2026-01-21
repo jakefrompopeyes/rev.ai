@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import {
-  Activity,
   ArrowRight,
   TrendingUp,
   Shield,
@@ -65,8 +65,13 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-primary p-2.5">
-                <Activity className="h-5 w-5 text-primary-foreground" />
+              <div className="relative h-9 w-9">
+                <Image
+                  src="/logo.png"
+                  alt="discovred logo"
+                  fill
+                  className="object-contain"
+                />
               </div>
               <span className="text-xl font-bold tracking-tight">discovred</span>
             </div>
@@ -416,7 +421,14 @@ export default function LandingPage() {
       <footer className="border-t border-border py-12 px-6 relative z-10">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4" />
+            <div className="relative h-4 w-4">
+              <Image
+                src="/logo.png"
+                alt="discovred logo"
+                fill
+                className="object-contain"
+              />
+            </div>
             <span>discovred</span>
           </div>
           <div>© 2024 discovred. Built for B2B SaaS on Stripe Billing.</div>

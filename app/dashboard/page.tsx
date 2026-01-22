@@ -944,6 +944,24 @@ export default function DashboardPage() {
                       />
                     </div>
 
+                    <RevenueForecast />
+
+                    <section className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-semibold">Pricing Intelligence</h2>
+                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                          AI-powered
+                        </span>
+                      </div>
+
+                      <div id="pricing-intelligence" className="grid grid-cols-1 lg:grid-cols-2 gap-6 scroll-mt-24">
+                        <DiscountLeakage variant="hero" />
+                        <PriceIncreaseSafety variant="hero" />
+                        <LegacyPlanDetector variant="hero" />
+                        <AnnualPlanOpportunity variant="hero" />
+                      </div>
+                    </section>
+
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                       <section>
                         <div className="flex items-center justify-between mb-4">
@@ -984,22 +1002,6 @@ export default function DashboardPage() {
                         />
                       </section>
                     </div>
-
-                    <section className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-lg font-semibold">Pricing Intelligence</h2>
-                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                          AI-powered
-                        </span>
-                      </div>
-
-                      <div id="pricing-intelligence" className="grid grid-cols-1 lg:grid-cols-2 gap-6 scroll-mt-24">
-                        <DiscountLeakage variant="hero" />
-                        <PriceIncreaseSafety variant="hero" />
-                        <LegacyPlanDetector variant="hero" />
-                        <AnnualPlanOpportunity variant="hero" />
-                      </div>
-                    </section>
                   </TabsContent>
 
                   <TabsContent value="revenue" className="space-y-6">
@@ -1007,7 +1009,6 @@ export default function DashboardPage() {
                       <RevenueTrendChart data={metricsHistory} isLoading={isLoadingHistory} />
                       <RevenueWaterfall data={waterfallData} isLoading={isLoadingWaterfall} />
                     </div>
-                    <RevenueForecast />
                   </TabsContent>
 
                   <TabsContent value="customers" className="space-y-6">

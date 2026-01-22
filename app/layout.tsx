@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Libre_Franklin, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
+import { BetaBanner } from '@/components/ui/beta-banner';
 
 const libreFranklin = Libre_Franklin({
   subsets: ['latin'],
@@ -18,6 +19,11 @@ const jetBrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'discovred - Revenue Intelligence Platform',
   description: 'Revenue intelligence and pricing analytics for subscription businesses on Stripe',
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({
@@ -29,6 +35,7 @@ export default function RootLayout({
     <html lang="en" className={`${libreFranklin.variable} ${jetBrainsMono.variable}`}>
       <body className="min-h-screen antialiased">
         <Providers>
+          <BetaBanner />
           {children}
         </Providers>
       </body>

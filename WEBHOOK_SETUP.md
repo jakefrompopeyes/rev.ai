@@ -70,7 +70,8 @@ The webhook endpoint handles the following events:
 4. **Copy the ngrok URL** (e.g., `https://abc123.ngrok.io`)
 
 5. **Set up webhook in Stripe Dashboard**:
-   - Go to https://dashboard.stripe.com/test/webhooks
+   - For test mode: Go to https://dashboard.stripe.com/test/webhooks
+   - For live mode: Go to https://dashboard.stripe.com/webhooks
    - Click "Add endpoint"
    - Enter: `https://abc123.ngrok.io/api/stripe/webhook`
    - Select the events listed above
@@ -89,8 +90,8 @@ The webhook endpoint handles the following events:
    - Example: `https://your-app.vercel.app`
 
 3. **Set up webhook in Stripe Dashboard**:
-   - **Test mode**: https://dashboard.stripe.com/test/webhooks
-   - **Live mode**: https://dashboard.stripe.com/webhooks
+   - **Live mode** (production): https://dashboard.stripe.com/webhooks
+   - **Test mode** (development): https://dashboard.stripe.com/test/webhooks
    - Click "Add endpoint"
    - Enter: `https://your-app.vercel.app/api/stripe/webhook`
    - Select events:

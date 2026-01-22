@@ -56,8 +56,49 @@ export async function generateRecommendations(organizationId: string): Promise<R
     recommendations.push(...recs);
   }
 
-  // Store recommendations
+  // Store recommendations (with deduplication)
   for (const rec of recommendations) {
+    // Check if a similar pending recommendation already exists
+    const existing = await prisma.aIRecommendation.findFirst({
+      where: {
+        organizationId,
+        title: rec.title,
+        status: { in: ['PENDING', 'IMPLEMENTED'] }, // Don't duplicate pending or implemented
+        insightId: rec.insightId || undefined, // Match by insight if available
+      },
+    });
+
+    if (existing) {
+      // Update existing recommendation if details have changed (but keep status if implemented)
+      if (existing.status === 'PENDING') {
+        const shouldUpdate =
+          existing.description !== rec.description ||
+          existing.reasoning !== rec.reasoning ||
+          existing.estimatedImpact !== rec.estimatedImpact ||
+          existing.priorityScore !== rec.priorityScore ||
+          existing.riskLevel !== rec.riskLevel;
+
+        if (shouldUpdate) {
+          await prisma.aIRecommendation.update({
+            where: { id: existing.id },
+            data: {
+              description: rec.description,
+              reasoning: rec.reasoning,
+              estimatedImpact: rec.estimatedImpact,
+              impactTimeframe: rec.impactTimeframe,
+              impactConfidence: rec.impactConfidence,
+              priorityScore: rec.priorityScore,
+              riskLevel: rec.riskLevel,
+              generatedAt: new Date(), // Update timestamp
+            },
+          });
+        }
+      }
+      // Skip creating duplicate (keep existing, especially if implemented)
+      continue;
+    }
+
+    // Create new recommendation
     await prisma.aIRecommendation.create({
       data: {
         organizationId,

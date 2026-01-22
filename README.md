@@ -74,15 +74,17 @@ discovred connects to your Stripe account via secure OAuth (read-only) and provi
     NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
     NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
     SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
-    STRIPE_MODE="test"
-    STRIPE_CLIENT_ID_TEST="ca_xxx"
-    STRIPE_SECRET_KEY_TEST="sk_test_xxx"
-    STRIPE_PUBLISHABLE_KEY_TEST="pk_test_xxx"
-    STRIPE_WEBHOOK_SECRET="whsec_xxx"
+    STRIPE_MODE="live"
+    STRIPE_CLIENT_ID_LIVE="ca_xxx"
+    STRIPE_SECRET_KEY_LIVE="sk_live_xxx"
+    STRIPE_PUBLISHABLE_KEY_LIVE="pk_live_xxx"
+    STRIPE_WEBHOOK_SECRET_LIVE="whsec_xxx"
    OPENAI_API_KEY="sk-xxx"
     PII_HASH_SECRET="replace-with-random-32-bytes"
    APP_URL="http://localhost:3000"
    ```
+   
+   **Note**: For development/testing, you can set `STRIPE_MODE="test"` and use test keys instead.
    For the full list (including Stripe price IDs), see `env.template`.
 
 3. **Set up database**

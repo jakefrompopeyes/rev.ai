@@ -23,6 +23,10 @@ import {
   Tag,
   CheckCircle2,
   ArrowUpRight,
+  AlertCircle,
+  FileSpreadsheet,
+  HelpCircle,
+  XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
@@ -108,14 +112,18 @@ export default function LandingPage() {
                 Revenue Intelligence for Stripe
               </div>
               
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] mb-6">
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.2] mb-6">
                 Stop guessing.{' '}
-                <span className="gradient-text block mt-2">Start growing.</span>
+                <span className="gradient-text block mt-2 pb-0.5">Start growing.</span>
               </h1>
               
-              <p className="text-lg sm:text-xl text-muted-foreground leading-relaxed mb-8 max-w-xl">
-                Built for B2B SaaS on Stripe Billing. Connect Stripe and get actionable insights to reduce churn,
-                find discount leakage, and make safer pricing changes.
+              <p className="text-lg sm:text-xl text-muted-foreground leading-relaxed mb-4 max-w-xl">
+                Are you losing revenue to hidden discount leakage? Struggling to know if a price increase is safe? 
+                Spending hours in spreadsheets trying to understand why customers churn?
+              </p>
+              <p className="text-lg sm:text-xl text-foreground font-medium leading-relaxed mb-8 max-w-xl">
+                discovred transforms your Stripe data into actionable revenue intelligence. Get instant insights on 
+                churn patterns, discount leakage, legacy pricing, and price-change safety—all without the spreadsheet headaches.
               </p>
 
               <div className="flex flex-col sm:flex-row items-start gap-4 mb-8">
@@ -218,6 +226,116 @@ export default function LandingPage() {
               </div>
             </motion.div>
           </div>
+        </div>
+      </section>
+
+      {/* Problems We Solve */}
+      <section className="py-24 px-6 bg-muted/30 relative z-10">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">
+              The problems we solve
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              B2B SaaS teams face these revenue challenges every day. We help you solve them with data, not guesswork.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              {
+                icon: DollarSign,
+                title: 'Hidden Revenue Leakage',
+                problem: 'You\'re giving discounts to customers who would pay full price, but you don\'t know which ones.',
+                solution: 'We identify unnecessary discounts and show you exactly how much revenue you\'re leaving on the table.',
+                iconBg: 'bg-red-500/10',
+                iconColor: 'text-red-600 dark:text-red-400',
+              },
+              {
+                icon: TrendingDown,
+                title: 'Mystery Churn',
+                problem: 'Customers are churning and you\'re not sure why. Is it pricing? Plan value? Payment issues?',
+                solution: 'AI-powered insights reveal churn patterns by plan, segment, and behavior so you can fix what\'s broken.',
+                iconBg: 'bg-orange-500/10',
+                iconColor: 'text-orange-600 dark:text-orange-400',
+              },
+              {
+                icon: History,
+                title: 'Legacy Pricing Creep',
+                problem: 'Old customers are paying outdated rates, but you\'re afraid to raise prices and risk churn.',
+                solution: 'We analyze your historical price increases to show you safe thresholds and identify customers ready for updates.',
+                iconBg: 'bg-purple-500/10',
+                iconColor: 'text-purple-600 dark:text-purple-400',
+              },
+              {
+                icon: FileSpreadsheet,
+                title: 'Spreadsheet Hell',
+                problem: 'You spend hours exporting Stripe data, building pivot tables, and trying to spot trends manually.',
+                solution: 'Automated sync and AI analysis mean insights are ready in minutes, not days. No spreadsheets required.',
+                iconBg: 'bg-blue-500/10',
+                iconColor: 'text-blue-600 dark:text-blue-400',
+              },
+              {
+                icon: HelpCircle,
+                title: 'Pricing Decisions in the Dark',
+                problem: 'You want to test new pricing or convert monthly to annual, but you don\'t know the impact or risk.',
+                solution: 'Get data-driven recommendations with revenue impact estimates and risk assessments before you make changes.',
+                iconBg: 'bg-emerald-500/10',
+                iconColor: 'text-emerald-600 dark:text-emerald-400',
+              },
+              {
+                icon: AlertCircle,
+                title: 'Reactive Problem Solving',
+                problem: 'You only discover revenue issues after they\'ve already cost you money and customers.',
+                solution: 'Proactive alerts and insights catch problems early, so you can fix them before they impact your bottom line.',
+                iconBg: 'bg-amber-500/10',
+                iconColor: 'text-amber-600 dark:text-amber-400',
+              },
+            ].map((item, i) => (
+              <motion.div
+                key={item.title}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                className="rounded-2xl border border-border bg-card p-6 shadow-lg"
+              >
+                <div className={`rounded-lg ${item.iconBg} p-3 w-fit mb-4`}>
+                  <item.icon className={`h-6 w-6 ${item.iconColor}`} />
+                </div>
+                <h3 className="font-semibold text-xl mb-3">{item.title}</h3>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">The Problem</div>
+                    <p className="text-sm text-muted-foreground">{item.problem}</p>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-primary uppercase tracking-wide mb-1.5">How We Help</div>
+                    <p className="text-sm text-foreground">{item.solution}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* CTA in problems section */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.6 }}
+            className="mt-12 text-center"
+          >
+            <Link href={freeReportHref}>
+              <Button size="lg" className="gap-2 text-base px-8">
+                See your revenue opportunities
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <p className="text-sm text-muted-foreground mt-4">
+              Get a free report in minutes • No credit card required
+            </p>
+          </motion.div>
         </div>
       </section>
 
@@ -365,18 +483,23 @@ export default function LandingPage() {
       {/* What You Get - Simple List */}
       <section className="py-24 px-6 bg-transparent relative z-10">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-12">
-            What you get
-          </h2>
+          <div className="text-center mb-12">
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">
+              Everything you need to grow revenue
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Stop wrestling with spreadsheets. Get instant, actionable insights from your Stripe data.
+            </p>
+          </div>
           
           <div className="space-y-6">
             {[
-              { icon: TrendingUp, title: 'Revenue Metrics', desc: 'Track MRR, ARR, ARPU, and churn in real-time with automatic Stripe sync.' },
-              { icon: Lightbulb, title: 'Smart Insights', desc: 'Get clear explanations of trends, anomalies, and revenue opportunities.' },
-              { icon: Zap, title: 'Actionable Recommendations', desc: 'Receive prioritized actions with estimated revenue impact.' },
-              { icon: BarChart3, title: 'Pricing Intelligence', desc: 'Detect discount leakage, legacy plans, and price-change opportunities before they hurt retention.' },
-              { icon: Shield, title: 'Secure & Read-Only', desc: 'OAuth connection with read-only access. Your data never leaves your Stripe account.' },
-              { icon: RefreshCw, title: 'Track Changes', desc: 'Monitor the impact of your pricing and retention changes over time.' },
+              { icon: TrendingUp, title: 'Real-Time Revenue Metrics', desc: 'Track MRR, ARR, ARPU, and churn in real-time with automatic Stripe sync. No manual exports or calculations.' },
+              { icon: Lightbulb, title: 'AI-Powered Insights', desc: 'Get plain-English explanations of trends, anomalies, and revenue opportunities. Understand the "why" behind your numbers.' },
+              { icon: Zap, title: 'Actionable Recommendations', desc: 'Receive prioritized actions with estimated revenue impact. Know exactly what to do next and how much it\'s worth.' },
+              { icon: BarChart3, title: 'Pricing Intelligence', desc: 'Detect discount leakage, legacy plans, and price-change opportunities before they hurt retention. Make safer pricing decisions.' },
+              { icon: Shield, title: 'Secure & Read-Only', desc: 'OAuth connection with read-only access. Your data never leaves your Stripe account. We can\'t modify anything.' },
+              { icon: RefreshCw, title: 'Track Your Impact', desc: 'Monitor the impact of your pricing and retention changes over time. See what\'s working and what isn\'t.' },
             ].map((item, i) => (
               <motion.div
                 key={item.title}
@@ -396,24 +519,65 @@ export default function LandingPage() {
               </motion.div>
             ))}
           </div>
+
+          {/* CTA in features section */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.6 }}
+            className="mt-12 text-center pt-12 border-t border-border"
+          >
+            <Link href={freeReportHref}>
+              <Button size="lg" variant="default" className="gap-2 text-base px-8">
+                Get started with a free report
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          </motion.div>
         </div>
       </section>
 
-      {/* Simple CTA */}
+      {/* Final CTA */}
       <section className="py-24 px-6 relative z-10">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-6">
-            Ready to unlock revenue insights?
-          </h2>
-          <p className="text-lg text-muted-foreground mb-10 max-w-2xl mx-auto">
-            Join B2B SaaS teams making smarter pricing and retention decisions with data-driven insights.
-          </p>
-          <Link href={freeReportHref}>
-            <Button size="lg" className="gap-2 text-base px-8">
-              Generate free report
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="rounded-3xl border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-background to-primary/5 p-12 text-center shadow-2xl"
+          >
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">
+              Stop leaving revenue on the table
+            </h2>
+            <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+              Connect your Stripe account and get instant insights on discount leakage, churn patterns, 
+              legacy pricing, and price-change opportunities. All in minutes, not days.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
+              <Link href={freeReportHref}>
+                <Button size="lg" className="gap-2 text-base px-8 h-12 text-lg">
+                  Generate your free report
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+              </Link>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <span>No credit card required</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <span>Read-only Stripe access</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <span>Best for $1M–$15M ARR</span>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </section>
 

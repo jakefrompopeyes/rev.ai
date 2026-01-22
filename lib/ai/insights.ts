@@ -61,8 +61,42 @@ export async function generateInsights(organizationId: string): Promise<InsightD
   const llmInsights = await runLLMAnalysis(metrics, subscriptions, organizationId);
   insights.push(...llmInsights);
 
-  // Store insights in database
+  // Store insights in database (with deduplication)
   for (const insight of insights) {
+    // Check if a similar active insight already exists
+    const existing = await prisma.aIInsight.findFirst({
+      where: {
+        organizationId,
+        title: insight.title,
+        category: insight.category,
+        isActive: true,
+        dismissedAt: null,
+      },
+    });
+
+    if (existing) {
+      // Update existing insight if severity or data has changed
+      if (
+        existing.severity !== insight.severity ||
+        existing.confidence !== insight.confidence ||
+        JSON.stringify(existing.dataPoints) !== JSON.stringify(insight.dataPoints)
+      ) {
+        await prisma.aIInsight.update({
+          where: { id: existing.id },
+          data: {
+            severity: insight.severity,
+            description: insight.description,
+            dataPoints: insight.dataPoints as object,
+            confidence: insight.confidence,
+            generatedAt: new Date(), // Update timestamp to show it's current
+          },
+        });
+      }
+      // Skip creating duplicate
+      continue;
+    }
+
+    // Create new insight
     await prisma.aIInsight.create({
       data: {
         organizationId,
